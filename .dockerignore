@@ -1,0 +1,57 @@
+# ── Virtual environment ───────────────────────────────────────────────────────
+.venv/
+venv/
+env/
+
+# ── Python cache ──────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+*.egg
+dist/
+build/
+
+# ── Runtime state (must never enter an image layer) ──────────────────────────
+*.db
+*.sqlite
+*.sqlite3
+*.log
+logs/
+traces/
+*.otlp
+*.jsonl
+
+# ── Secrets ───────────────────────────────────────────────────────────────────
+../kite_logik_demo/.env
+.env.*
+!.env.example
+
+# ── Development artifacts ─────────────────────────────────────────────────────
+tests/
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.mypy_cache/
+.ruff_cache/
+
+# ── Documentation ────────────────────────────────────────────────────────────
+docs/
+*.md
+!README.md
+
+# ── CI / tooling ─────────────────────────────────────────────────────────────
+.github/
+.idea/
+.vscode/
+.DS_Store
+
+# ── Screenshot artifacts ──────────────────────────────────────────────────────
+*.png
+*.jpg
+*.jpeg

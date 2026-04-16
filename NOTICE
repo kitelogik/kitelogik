@@ -1,0 +1,35 @@
+Kite Logik
+Copyright 2026 Kite Logik Contributors
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+COMMERCIAL LICENSING
+--------------------
+For enterprise features, priority support, or OEM licensing:
+  Email:   licensing@kitelogik.com
+
+THIRD-PARTY COMPONENTS
+-----------------------
+This software includes components under the following licenses:
+
+  - Open Policy Agent (OPA)          Apache 2.0
+  - FastAPI                          MIT
+  - Pydantic                         MIT
+  - httpx                            BSD
+  - OpenTelemetry Python SDK         Apache 2.0
+  - asyncpg                          Apache 2.0
+  - Docker SDK for Python            Apache 2.0
+  - Anthropic Python SDK             MIT
+
+Full license texts for third-party components are available in their
+respective package distributions.

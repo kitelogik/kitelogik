@@ -1,0 +1,120 @@
+
+<style>
+.cat-btn{padding:6px 14px;border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);background:var(--color-background-primary);color:var(--color-text-secondary);font-size:13px;cursor:pointer;transition:all .15s;white-space:nowrap}
+.cat-btn:hover{background:var(--color-background-secondary)}
+.cat-btn.on{border-color:var(--color-border-info);background:var(--color-background-info);color:var(--color-text-info);font-weight:500}
+.cats{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 1rem}
+.tbl{width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed}
+.tbl th{text-align:left;padding:8px 10px;font-weight:500;color:var(--color-text-secondary);border-bottom:0.5px solid var(--color-border-secondary);font-size:12px;letter-spacing:.3px}
+.tbl td{padding:7px 10px;border-bottom:0.5px solid var(--color-border-tertiary);vertical-align:top;color:var(--color-text-primary);line-height:1.5}
+.tbl tr:last-child td{border-bottom:none}
+.tbl .feat{font-weight:500;width:25%}
+.tbl .kl,.tbl .ms{width:37.5%}
+.tag{display:inline-block;font-size:11px;padding:2px 8px;border-radius:var(--border-radius-md);font-weight:500;margin-right:4px}
+.tag-adv{background:var(--color-background-success);color:var(--color-text-success)}
+.tag-gap{background:var(--color-background-danger);color:var(--color-text-danger)}
+.tag-par{background:var(--color-background-secondary);color:var(--color-text-secondary)}
+.tag-edge{background:var(--color-background-warning);color:var(--color-text-warning)}
+.legend{display:flex;gap:12px;flex-wrap:wrap;margin:0 0 1rem;font-size:12px;color:var(--color-text-secondary)}
+.legend-item{display:flex;align-items:center;gap:4px}
+.rh{display:none}
+</style>
+
+<div class="cats" id="cats"></div>
+<div class="legend">
+<span class="legend-item"><span class="tag tag-adv">KL advantage</span></span>
+<span class="legend-item"><span class="tag tag-gap">KL gap</span></span>
+<span class="legend-item"><span class="tag tag-edge">AGT edge</span></span>
+<span class="legend-item"><span class="tag tag-par">Comparable</span></span>
+</div>
+<div id="out"></div>
+
+<script>
+const D=[
+{cat:"Isolation & sandboxing",rows:[
+{f:"Process isolation",kl:"Docker containers with dedicated kernel per session. Firecracker MicroVM for enterprise (hardware-virtualized, ~125ms boot).",ms:"None. Policy engine and agents run in the same Python process. 'Execution rings' are logical middleware checks, not CPU privilege levels.",t:"adv"},
+{f:"Network isolation",kl:"Docker network_mode=none (real namespace isolation) or named bridge allowlist per session.",ms:"Policy-level denial of network tool calls. No network namespace separation.",t:"adv"},
+{f:"Resource limits",kl:"cgroups-enforced: 256MB RAM, 50% CPU, 64 procs. Unconditional, cannot be disabled by configuration.",ms:"API call rate counters in-process. No cgroups, no ulimits. A runaway agent consumes host resources.",t:"adv"},
+{f:"Filesystem isolation",kl:"Read-only rootfs mount with tmpfs scratch. Agent physically cannot write to host filesystem.",ms:"Policy denies tool calls named 'file_write'. Agent with code execution can bypass via direct syscalls.",t:"adv"},
+{f:"Kill switch",kl:"Container/MicroVM termination (kill -9 equivalent). Token revoked, sandbox destroyed.",ms:"Sets governance state to 'denied'. Cannot terminate a runaway process — only denies subsequent governed calls.",t:"adv"},
+{f:"gVisor support",kl:"runsc runtime via SANDBOX_RUNTIME env var.",ms:"Not available.",t:"adv"},
+]},
+{cat:"Policy engine",rows:[
+{f:"Policy language",kl:"OPA/Rego only. Full Rego expressiveness, bundle management, partial evaluation.",ms:"Three options: YAML rules (native), OPA/Rego (CLI wrapper or remote), Amazon Cedar. Built-in expression evaluator for simple rules.",t:"edge"},
+{f:"Policy evaluation latency",kl:"2\u20138ms typical (HTTP call to OPA). Embedded regorus evaluator planned but not yet implemented.",ms:"<0.1ms p99 (built-in evaluator). OPA mode adds latency via CLI/HTTP.",t:"gap"},
+{f:"Fail-closed behavior",kl:"Deny-all when OPA unreachable. risk_tier=SECURITY_CRITICAL. Not configurable.",ms:"default_action: deny. Four conflict resolution strategies (deny-overrides, allow-overrides, priority-first, most-specific).",t:"par"},
+{f:"Policy scope hierarchy",kl:"Flat: policies/*.rego aggregated by main.rego. Hard-deny always wins.",ms:"3-tier hierarchy: global \u2192 tenant \u2192 agent. Auditable resolution traces.",t:"edge"},
+{f:"Policy languages supported",kl:"Rego only.",ms:"YAML, Rego, Cedar.",t:"edge"},
+{f:"Governance event types",kl:"6 types: tool_call, agent.spawn, agent.delegate, agent.plan, agent.budget, data_access.",ms:"Per-tool-call interception via framework hooks. Lifecycle governance via trust tiers and escalation policies.",t:"par"},
+{f:"Plan-before-execute",kl:"evaluate_plan() submits proposed action sequences to OPA before any step executes.",ms:"Not documented as a distinct capability.",t:"adv"},
+]},
+{cat:"Credentials & identity",rows:[
+{f:"Agent identity",kl:"Session-scoped tokens via CredentialBroker. CSPRNG generation, automatic expiry.",ms:"Ed25519 cryptographic identity per agent. did:mesh:* DIDs, W3C DID Document, JWK/JWKS support.",t:"edge"},
+{f:"Token lifecycle",kl:"Issue, validate, revoke, bulk revoke. Token revoked in try/finally on any exit (crash, timeout, exception).",ms:"IdentityRegistry with cascade revocation. File-backed persistence (atomic JSON writes).",t:"par"},
+{f:"Delegation scope enforcement",kl:"Child scopes must be strict subset of parent. Child token expires no later than parent. Enforced by both OPA and CredentialBroker.",ms:"Capability delegation with wildcards. Joint liability tracking. Cascade revocation.",t:"par"},
+{f:"Trust scoring",kl:"Static trust tiers (INTERNAL / DELEGATED / EXTERNAL / UNTRUSTED) for memory provenance.",ms:"Dynamic 0\u20131000 trust score across 5 behavioral tiers. Trust decay over time. Agents must continually earn trust.",t:"edge"},
+{f:"SPIFFE/SVID integration",kl:"Not available.",ms:"Integration path defined but currently stubbed (not functional).",t:"par"},
+{f:"Cleanup guarantees",kl:"try/finally ensures token revocation and sandbox destruction on any exit path. Documented and tested.",ms:"File-backed persistence. Cleanup on abnormal termination not explicitly documented.",t:"adv"},
+]},
+{cat:"Human-in-the-loop",rows:[
+{f:"HITL mechanism",kl:"Async SQLite-backed queue with asyncio.Event blocking. Agent suspends at zero CPU until decision arrives.",ms:"EscalationPolicy with ESCALATE tier. Approval workflows with quorum logic. Added in v1.1.0.",t:"adv"},
+{f:"Dashboard",kl:"Real-time WebSocket dashboard with approve/deny UI, button rate limiting, trace waterfalls, memory browser.",ms:"No built-in dashboard. Programmatic API only.",t:"adv"},
+{f:"Timeout handling",kl:"Configurable timeout (default 5 min). Timeout = deny. Background expiry task every 30s catches orphaned actions.",ms:"Not documented.",t:"adv"},
+{f:"Decision immutability",kl:"WHERE status='PENDING' SQL clause ensures decisions cannot be changed once recorded.",ms:"Not documented.",t:"adv"},
+{f:"Quorum-based approval",kl:"Not available. Single-reviewer model.",ms:"Quorum logic for multi-reviewer approval workflows.",t:"edge"},
+]},
+{cat:"Audit & observability",rows:[
+{f:"Audit trail",kl:"Append-only SQLite with SQL triggers preventing UPDATE/DELETE. SHA-256 policy version hash per decision.",ms:"Ed25519-signed audit chain with hash-chain tamper detection. Append-only logging.",t:"par"},
+{f:"OpenTelemetry",kl:"GenAI Semantic Conventions v1.37+. Spans per stage (credential, schema, OPA, HITL, sanitize). Metadata only \u2014 no raw prompts.",ms:"OpenTelemetry tracing + Prometheus metrics + PagerDuty alerting.",t:"par"},
+{f:"Policy replay",kl:"PolicyReplayer re-evaluates historical records against current OPA rules to detect regressions before deploying updates.",ms:"Not available as a distinct feature.",t:"adv"},
+{f:"SIEM integration",kl:"SIEMWebhook with retry/backoff for Splunk HEC, Elastic, generic JSON.",ms:"Not explicitly documented in current release.",t:"adv"},
+{f:"Session export",kl:"JSON compliance report with SHA-256 integrity hash for tamper detection.",ms:"Compliance CLI (agent-compliance verify) produces signed attestations. OWASP ASI 2026, EU AI Act, HIPAA, SOC2, NIST mapping.",t:"edge"},
+{f:"Grafana dashboard",kl:"Pre-built JSON dashboard auto-provisioned in enterprise demo.",ms:"Grafana dashboards referenced in observability docs.",t:"par"},
+]},
+{cat:"Framework & language support",rows:[
+{f:"Agent framework adapters",kl:"6: OpenAI, LangChain, CrewAI, LangGraph, OpenAI Agents SDK, Anthropic/Claude.",ms:"13+: LangChain, CrewAI, AutoGen, OpenAI Agents SDK, Google ADK, Semantic Kernel, MS Agent Framework, Dify, LlamaIndex, Haystack, PydanticAI, LangGraph, Azure AI Foundry.",t:"gap"},
+{f:"Language SDKs",kl:"Python only.",ms:"Python (primary), TypeScript (full parity, 136 tests), .NET/C#, Rust, Go.",t:"gap"},
+{f:"LLM agnosticism",kl:"Levels 1, 2, 4 fully LLM-agnostic. Level 3 (AgentSession) Claude-only.",ms:"Fully LLM-agnostic across all components.",t:"edge"},
+{f:"GovernedToolbox fallback",kl:"Works with any framework that dispatches tools as (name, args) pairs. Documented path for Google SDK, AutoGen, Ollama.",ms:"Framework hooks for each supported framework. No generic fallback pattern documented.",t:"par"},
+{f:"Governance Gateway (HTTP)",kl:"Centralized FastAPI HTTP API. Any agent, any language can POST to /v1/tools/call.",ms:"No HTTP gateway. Governance is in-process only.",t:"adv"},
+]},
+{cat:"Response sanitization",rows:[
+{f:"Prompt injection defense",kl:"10 regex patterns, NFKC unicode normalization, zero-width character bypass prevention. ReDoS-resistant. Runs on every tool output.",ms:"MCP Security Scanner detects tool poisoning, typosquatting, hidden instructions, rug-pull attacks. Content Safety integration available.",t:"par"},
+{f:"MCP supply chain verification",kl:"SHA-256 manifest hashing. Blocklist on mismatch (MCPSupplyChainError).",ms:"MCP Security Scanner with 5 attack pattern categories. Supply chain analysis.",t:"par"},
+{f:"Memory sanitization",kl:"External/untrusted/delegated memory sources sanitized on write. No bypass path. Trust tier provenance tracked.",ms:"Not documented as a distinct feature.",t:"adv"},
+]},
+{cat:"Multi-agent delegation",rows:[
+{f:"Scope narrowing",kl:"Strict invariant: child scopes \u2286 parent scopes. Enforced by both OPA (delegation.rego) and CredentialBroker.delegate().",ms:"Capability delegation chains with wildcards. Joint liability tracking.",t:"par"},
+{f:"Delegation depth tracking",kl:"Tracked per session. Configurable cap (default: 2 levels). OPA hard-blocks depth > max.",ms:"Delegation chains tracked. No documented hard cap.",t:"adv"},
+{f:"Per-worker sandbox",kl:"Each delegated worker gets its own Docker container. Workers isolated from each other and from parent.",ms:"No per-worker isolation. All delegates share the parent process.",t:"adv"},
+{f:"Parallel delegation",kl:"Orchestrator.delegate_parallel() with asyncio.gather(). Results collected and returned.",ms:"Agent mesh supports multi-agent communication. Routing patterns documented.",t:"par"},
+{f:"Inter-agent protocol",kl:"Internal delegation only. No external agent communication protocol.",ms:"IATP (Inter-Agent Trust Protocol) with bridges for A2A (Google), MCP (Anthropic).",t:"edge"},
+]},
+{cat:"Maturity & ecosystem",rows:[
+{f:"Test count",kl:"535 unit tests across 34+ files. 194 OPA policy tests. Adversarial test suite.",ms:"9,500+ tests across 5 languages. 7 fuzz targets via ClusterFuzzLite. Growth from 339 to 9,500 in 24 days.",t:"gap"},
+{f:"Supply chain security",kl:"No SLSA, SBOM, or OpenSSF Scorecard documented.",ms:"SLSA-compatible build provenance. OpenSSF Scorecard ~7.7. SBOM on every release.",t:"gap"},
+{f:"Regulatory mapping",kl:"EU AI Act positioning documented in business plan. No formal compliance attestation tooling.",ms:"OWASP ASI 10/10, CSA Agentic Trust Framework 15/15, EU AI Act (Articles 9, 12, 14), HIPAA, SOC2, NIST. Compliance CLI.",t:"gap"},
+{f:"Project maturity",kl:"Pre-launch. Full code review completed. All components marked [REVIEWED].",ms:"Public preview. Alpha on PyPI. Several features stubbed (K8s operator, SPIRE, Redis/Postgres). Architecture docs directories empty.",t:"par"},
+{f:"License",kl:"Apache 2.0 with planned commercial enterprise edition.",ms:"MIT. No managed service, no enterprise support, no SLA. Stated intent to move to a foundation.",t:"par"},
+{f:"Primary contributor",kl:"Solo founder.",ms:"Single primary contributor (Imran Siddique, Microsoft). Microsoft branding.",t:"par"},
+]},
+];
+
+const cats=D.map(d=>d.cat);
+let active=cats[0];
+
+function render(){
+  document.getElementById("cats").innerHTML=cats.map(c=>`<button class="cat-btn${c===active?" on":""}" onclick="pick('${c.replace(/'/g,"\\'")}')">${c}</button>`).join("");
+  const sec=D.find(d=>d.cat===active);
+  let h=`<table class="tbl"><thead><tr><th class="feat">Feature</th><th class="kl">Kite Logik</th><th class="ms">Microsoft AGT</th></tr></thead><tbody>`;
+  for(const r of sec.rows){
+    const tl={adv:"KL advantage",gap:"KL gap",edge:"AGT edge",par:"Comparable"};
+    const tc={adv:"tag-adv",gap:"tag-gap",edge:"tag-edge",par:"tag-par"};
+    h+=`<tr><td class="feat">${r.f}<br><span class="tag ${tc[r.t]}">${tl[r.t]}</span></td><td class="kl">${r.kl}</td><td class="ms">${r.ms}</td></tr>`;
+  }
+  h+=`</tbody></table>`;
+  document.getElementById("out").innerHTML=h;
+}
+function pick(c){active=c;render();}
+render();
+</script>

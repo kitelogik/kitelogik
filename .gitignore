@@ -1,0 +1,145 @@
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# ── Virtual environments ───────────────────────────────────────────────────────
+../kite_logik_demo/.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# ── Distribution / packaging ──────────────────────────────────────────────────
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+
+# ── Testing ───────────────────────────────────────────────────────────────────
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
+htmlcov/
+
+# ── Type checkers ─────────────────────────────────────────────────────────────
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+.ruff_cache/
+
+# ── Jupyter ───────────────────────────────────────────────────────────────────
+.ipynb_checkpoints
+*/.ipynb_checkpoints/*
+profile_default/
+ipython_config.py
+
+# ── macOS ─────────────────────────────────────────────────────────────────────
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# ── JetBrains IDEs ────────────────────────────────────────────────────────────
+.idea/
+*.iws
+*.iml
+*.ipr
+out/
+.idea_modules/
+
+# ── VS Code ───────────────────────────────────────────────────────────────────
+.vscode/
+*.code-workspace
+
+# ── Kite Logik — internal planning docs (never public) ───────────────────────
+docs/gtm-roadmap.md
+docs/competitive-analysis.md
+docs/oss-improvement-plan.md
+
+# ── Kite Logik — enterprise staging ─────────────────────────────────────────
+# Enterprise-only source files waiting to be extracted to kitelogik-enterprise.
+# Must never appear in the public OSS repo.
+enterprise_staging/
+
+# ── Kite Logik — runtime databases ───────────────────────────────────────────
+# These are generated at runtime and must never be committed.
+# They may contain session state, credentials, and audit records.
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# ── Kite Logik — secrets ─────────────────────────────────────────────────────
+# .env holds API keys and service credentials. .env.example is safe to commit.
+# The !.env.example line below explicitly allows it despite the .env rule above.
+../kite_logik_demo/.env
+.env.*
+!.env.example
+
+# ── Kite Logik — trace output ────────────────────────────────────────────────
+traces/
+*.otlp
+*.jsonl
+
+# ── Kite Logik — screenshot artifacts ────────────────────────────────────────
+screenshot_*.png
+review_*.png
+
+# ── Dev artifacts (local only) ────────────────────────────────────────────────
+dev/*.db
+dev/*.db-shm
+dev/*.db-wal
+dev/*.jsonl
+
+# ── Docker ────────────────────────────────────────────────────────────────────
+.docker/
+
+# ── Logs ─────────────────────────────────────────────────────────────────────
+*.log
+logs/

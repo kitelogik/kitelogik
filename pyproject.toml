@@ -1,0 +1,138 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kitelogik"
+version = "0.0.1"
+description = "Governance middleware for AI agents — policy enforcement, credential lifecycle, audit trail."
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "Apache-2.0"}
+authors = [{name = "Kite Logik Contributors"}]
+keywords = ["ai", "agents", "governance", "opa", "policy", "llm", "security"]
+classifiers = [
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+]
+
+dependencies = [
+    "anthropic>=0.40.0",
+    "opentelemetry-api>=1.27.0",
+    "opentelemetry-sdk>=1.27.0",
+    "pydantic>=2.7.0",
+    "httpx>=0.27.0",
+    "python-dotenv>=1.0.0",
+    "opentelemetry-exporter-otlp-proto-http>=1.27.0",
+    "pyyaml>=6.0",
+]
+
+[project.scripts]
+kitelogik = "kitelogik.cli:main"
+
+[project.urls]
+Homepage = "https://kitelogik.com"
+Repository = "https://github.com/kitelogik/kitelogik"
+Documentation = "https://github.com/kitelogik/kitelogik#readme"
+"Bug Tracker" = "https://github.com/kitelogik/kitelogik/issues"
+Changelog = "https://github.com/kitelogik/kitelogik/blob/main/CHANGELOG.md"
+
+[project.optional-dependencies]
+regorus = ["regoruspy>=0.1.0"]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-mock>=3.14.0",
+    "respx>=0.21.0",
+    "ruff>=0.6.0",
+    "mypy>=1.10.0",
+    "pre-commit>=3.7.0",
+    "livereload>=2.7.0",
+    "hypothesis>=6.0",
+]
+
+# ── Enterprise extension points ───────────────────────────────────────────────
+# The kitelogik-enterprise package registers its implementations here.
+# OSS code discovers them via kitelogik.edition.load_plugin(group).
+# This section is intentionally empty in the OSS package — it documents the
+# contract that enterprise (or third-party) extensions must implement.
+#
+# kitelogik-enterprise's pyproject.toml will contain entries like:
+#
+#   [project.entry-points."kitelogik.sandbox_runtime"]
+#   default = "kitelogik_enterprise.sandbox.firecracker:FirecrackerRuntime"
+#
+#   [project.entry-points."kitelogik.memory_backend"]
+#   default = "kitelogik_enterprise.memory.postgres:PostgresMemoryBackend"
+#
+#   [project.entry-points."kitelogik.hitl_backend"]
+#   default = "kitelogik_enterprise.anchor.postgres:PostgresHITLQueue"
+#
+#   [project.entry-points."kitelogik.credential_broker"]
+#   default = "kitelogik_enterprise.anchor.vault:VaultCredentialBroker"
+#
+#   [project.entry-points."kitelogik.audit_backend"]
+#   default = "kitelogik_enterprise.audit.postgres:PostgresAuditStore"
+
+[tool.setuptools.packages.find]
+include = ["kitelogik*", "examples*"]
+exclude = ["tests*", ".venv*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+minversion = "8.0"
+filterwarnings = [
+    "error::DeprecationWarning",
+    "ignore::DeprecationWarning:httpx",
+    "ignore::DeprecationWarning:anthropic",
+]
+markers = [
+    "integration: tests that require external services (Docker, OPA) to be running",
+    "slow: load or concurrency tests",
+    "security: adversarial / security-focused tests",
+]
+
+[tool.coverage.run]
+source = ["kitelogik"]
+omit = [
+    "*/tests/*",
+    "*/conftest.py",
+    "quickstart.py",
+    "dev/explore.py",
+    "dev/benchmark.py",
+    "examples/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+]
+fail_under = 75
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+check_untyped_defs = true
+ignore_missing_imports = true
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "CPY001"]
+
+[tool.ruff.lint.flake8-copyright]
+notice-rgx = "SPDX-License-Identifier: Apache-2\\.0"

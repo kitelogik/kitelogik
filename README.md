@@ -1,0 +1,383 @@
+# Kite Logik
+
+[![CI](https://github.com/kitelogik/kitelogik/actions/workflows/ci.yml/badge.svg)](https://github.com/kitelogik/kitelogik/actions/workflows/ci.yml)
+[![Tests](https://img.shields.io/badge/tests-681%20passing-brightgreen)](https://github.com/kitelogik/kitelogik/actions)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12-blue)](https://www.python.org)
+
+**The governance control plane for AI agents.** Kite Logik governs what your agents can do, what they can spawn, what they can access, and what resources they can consume — enforced at the infrastructure level, not the prompt level.
+
+Other tools test prompts. Other tools validate LLM outputs. Kite Logik governs the **agent itself.**
+
+```
+A prompt-based guardrail is a suggestion.
+Kite Logik is a lock.
+```
+
+## Why Kite Logik
+
+Prompt-level guardrails rely on the model cooperating. Kite Logik doesn't.
+
+- **Infrastructure enforcement** — Rules are evaluated by OPA, enforced by the sandbox and credential broker. The model cannot override a deny.
+- **Agent-level governance** — Not just tool calls. Agent spawn, delegation, plans, resource budgets, and data access are all policy-controlled.
+- **OPA/Rego policies** — The same policy language security teams already use for Kubernetes. Deterministic, testable, version-controlled.
+- **Zero-trust sessions** — Every agent gets a scoped, short-lived credential. Deny-by-default networking. Least privilege by default.
+- **Immutable audit trail** — Every governance decision is logged, timestamped, and integrity-hashed. SQL triggers prevent tampering.
+
+## What Kite Logik Governs
+
+| Governance Event | What's Evaluated | Example |
+|---|---|---|
+| **Tool calls** | Every tool invocation, before execution | "Block file writes outside /tmp" |
+| **Agent spawn** | Agent creation with requested capabilities | "Max delegation depth is 2" |
+| **Delegation** | Agent-to-agent task handoff | "Child scopes must be subset of parent" |
+| **Plans** | Proposed action sequence, before any step runs | "Deny plans with blocked tools" |
+| **Resource budgets** | Token spend, API calls, compute time | "Deny if session budget exhausted" |
+| **Data access** | Classification-based flow control | "Confidential data stays in primary session" |
+
+All events flow through the same pipeline:
+
+```
+Governance Event → Credential Check → OPA Evaluation → ALLOW / DENY
+                                                         ↓ (rare, high-stakes only)
+                                                       HITL Escalation
+```
+
+## Architecture
+
+```
+┌──────────────────────────────────────────────────────────┐
+│                     CONTROL PLANE                        │
+│  Agent lifecycle · Delegation chains · Resource budgets  │
+│  Plan-before-execute · Data classification               │
+└──────────────────────────┬───────────────────────────────┘
+                           │
+            ┌──────────────▼──────┐
+            │  EMBEDDED SDK       │
+            │  @governed          │
+            │  GovernedToolbox    │
+            │  Framework adapters │
+            │  (in-process)       │
+            └──────────────┬──────┘
+                           │
+    ┌──────────────────────▼───────────────────────────────┐
+    │              TETHER (Policy Engine)                   │
+    │  OPA/Rego or Regorus · Deny-by-default · Fail-closed │
+    │  YAML or Rego policies · 2-tier hierarchy            │
+    └──────────────────────┬───────────────────────────────┘
+                           │
+            ┌──────────────▼──────────────┐
+            │  ANCHOR                     │
+            │  Credential broker          │
+            │  Audit log                  │
+            │  HITL queue                 │
+            │  OpenTelemetry              │
+            └─────────────────────────────┘
+```
+
+### Deployment Modes
+
+| Mode | Who Uses It | How |
+|---|---|---|
+| **Embedded SDK** | Individual developers & teams | `@governed` decorator wraps tool functions in-process. Zero network hop. Add governance to any agent in 3 lines. |
+
+> **Enterprise:** The Governance Gateway (centralized HTTP API enforcement) is available in [Kite Logik Enterprise](mailto:licensing@kitelogik.com).
+
+## Getting Started
+
+**New project** — scaffold a governed agent in seconds:
+
+```bash
+pip install kitelogik
+docker compose up -d opa          # start OPA policy engine
+kitelogik init my-agent
+cd my-agent
+python agent.py                   # see ALLOW / BLOCK decisions immediately
+```
+
+This creates a `policies/policy.yaml` with starter rules, compiles it to Rego, and generates an `agent.py` that runs governance demos. Set `ANTHROPIC_API_KEY` to enable an interactive Claude agent loop.
+
+**Existing project** — add governance to any tool function:
+
+```bash
+pip install kitelogik
+docker compose up -d opa
+```
+
+```python
+from kitelogik import governed, PolicyGate, OPAClient, SessionContext
+
+gate = PolicyGate(opa_client=OPAClient())
+ctx  = SessionContext(session_id="s1", user_role="support",
+                      session_scopes=["read_customer", "approve_refund"])
+
+@governed(gate=gate, context=ctx)
+async def approve_refund(customer_id: str, amount: float) -> str:
+    return payment_api.refund(customer_id, amount)
+```
+
+**With OPA server** — for team-wide policy management:
+
+```bash
+pip install kitelogik
+opa run --server policies/        # or: docker compose up -d opa
+```
+
+## Integrate in 3 Lines
+
+**Decorator** — wrap any function:
+
+```python
+from kitelogik import governed, PolicyGate, OPAClient, SessionContext
+
+gate = PolicyGate(opa_client=OPAClient())
+ctx  = SessionContext(session_id="s1", user_role="support",
+                      session_scopes=["read_customer", "approve_refund_under_100"])
+
+@governed(gate=gate, context=ctx)
+async def approve_refund(customer_id: str, amount: float) -> str:
+    return payment_api.refund(customer_id, amount)
+
+# approve_refund("cust_123", 50.0)   → OPA allows, runs normally
+# approve_refund("cust_123", 500.0)  → OPA denies, raises GovernanceError
+```
+
+**OpenAI** — drop into your existing tool loop:
+
+```python
+from kitelogik.adapters.openai import OpenAIAdapter
+
+adapter = OpenAIAdapter(gate=gate, context=ctx)
+adapter.register("approve_refund", approve_refund_fn, schema=schema)
+
+tools = adapter.openai_tool_schemas()       # pass to OpenAI API
+results = await adapter.execute_all(calls)  # governed execution
+```
+
+**LangChain** — wrap tools or an entire toolkit:
+
+```python
+from kitelogik.adapters.langchain import govern_toolkit
+
+tools = govern_toolkit(existing_tools, gate=gate, context=ctx)
+agent = create_react_agent(llm, tools=tools)
+```
+
+**11 framework adapters** — OpenAI, LangChain, CrewAI, OpenAI Agents SDK, LangGraph, Google ADK, PydanticAI, LlamaIndex, Semantic Kernel, Haystack, Dify. All share the same governance pipeline. See `docs/implementation-guide.md` for usage examples.
+
+## Writing Policies
+
+### Option A: YAML (no Rego required)
+
+Write policies in YAML and compile to Rego:
+
+```yaml
+# policies/custom_rules.yaml
+version: 1
+package: kitelogik.custom_rules
+rules:
+  - name: block_high_refunds
+    when:
+      action: approve_refund
+      args.amount: { gt: 1000 }
+    then: deny
+    reason: "Refunds over $1000 require escalation"
+
+  - name: allow_read_ops
+    when:
+      action: { in: [read_customer, list_transactions] }
+      context.session_scopes: { contains: read_customer }
+    then: allow
+    risk_tier: INFORMATIONAL
+```
+
+```bash
+kitelogik compile policies/custom_rules.yaml   # generates .rego file
+kitelogik validate                              # check syntax
+```
+
+### Option B: Rego (full control)
+
+Policies are OPA/Rego files in `kitelogik/policies/`. Every file starts with `default allow := false` (deny-by-default).
+
+```rego
+package kitelogik.financial
+
+import future.keywords.if
+import future.keywords.in
+
+default allow := false
+
+# Allow refunds under $100 for support agents with the right scope
+allow if {
+    input.action == "approve_refund"
+    "approve_refund_under_100" in input.context.session_scopes
+    input.context.user_role in {"support_agent", "manager"}
+    input.args.amount <= 100
+}
+```
+
+Agent lifecycle policies work the same way:
+
+```rego
+package kitelogik.agent_lifecycle
+
+import future.keywords.if
+import future.keywords.in
+import future.keywords.every
+
+default allow := false
+default deny := false
+
+# Allow spawn when within depth limit and capabilities are valid
+allow if {
+    input.event_type == "agent.spawn"
+    input.context.delegation_depth <= 2
+    every cap in input.requested_capabilities {
+        cap in input.context.session_scopes
+    }
+}
+
+# Deny spawn when delegation depth exceeds limit
+deny if {
+    input.event_type == "agent.spawn"
+    input.context.delegation_depth > 2
+}
+```
+
+See `kitelogik/policies/examples/` for annotated templates and `kitelogik/policies/library/` for ready-to-use starter policies.
+
+## Session Credentials
+
+Every agent session gets a scoped, short-lived credential. The policy gate validates it on every governance event. Agents cannot expand their own permissions.
+
+```python
+from kitelogik.anchor.credentials import CredentialBroker
+
+broker = CredentialBroker()
+token = broker.issue(session_id="s1", scopes=["read_customer"], ttl_seconds=300)
+
+# Delegation narrows scope — child never gets more than parent
+child_token = broker.delegate(
+    parent_token_id=token.token_id,
+    requested_scopes=["read_customer"],  # must be subset of parent
+    session_id="s1_worker",
+)
+```
+
+## Risk Tiers
+
+| Tier | Examples | Default Outcome |
+|---|---|---|
+| `INFORMATIONAL` | Read-only lookups, memory queries | Auto-allow |
+| `OPERATIONAL` | Write/update operations | Allow if scoped |
+| `TRANSACTIONAL_HIGH` | High-value financial operations | Policy-defined (HITL optional) |
+| `DESTRUCTIVE` | Delete, bulk operations | Policy-defined |
+| `SECURITY_CRITICAL` | Shell access, credential ops, path traversal | Hard block |
+
+HITL escalation is triggered **only when OPA policy explicitly sets `requires_hitl := true`** — for high-stakes situations like wire transfers or restricted data access. Most governance decisions resolve instantly with zero human delay.
+
+## Project Structure
+
+```
+kitelogik/
+  __init__.py       Public API re-exports
+  governed.py       @governed decorator, GovernedToolbox
+  adapters/         11 framework adapters
+  cli.py            CLI entry point
+  tether/           Policy engine: OPA client, Regorus client, hierarchy, sanitizer
+  anchor/           Credential broker, HITL queue, session tokens
+  memory/           Agent memory with trust tiers and provenance
+  agents/           Agent session loop
+  audit/            Immutable append-only audit log
+  observability/    OpenTelemetry tracing
+  mcp/              MCP client with supply chain verification
+  policies/         OPA/Rego rules, YAML compiler, starter library, examples
+tests/              42 test files: unit, integration, adversarial, fuzz, benchmark
+```
+
+## OSS vs Enterprise
+
+The OSS gives you the full governance pipeline for your agents. Enterprise gives you governance at organizational scale.
+
+| Feature | OSS | Enterprise |
+|---|:---:|:---:|
+| **Governance Pipeline** | | |
+| OPA policy engine (Tether) | Y | Y |
+| Regorus in-process Rego engine (experimental) | Y | Y |
+| YAML policy frontend (`kitelogik compile`) | Y | Y |
+| 2-tier policy hierarchy (global + project) | Y | Y |
+| Tool call governance | Y | Y |
+| Agent lifecycle governance (spawn, delegate, plan) | Y | Y |
+| Resource budget enforcement | Y | Y |
+| Data classification labels | Y | Y |
+| Compliance CLI with OWASP ASI mapping | Y | Y |
+| Cross-agent governance (org-wide budgets) | | Y |
+| **Runtime** | | |
+| Docker sandbox (network isolation, resource limits) | | Y |
+| Firecracker MicroVM | | Y |
+| **Credentials & Access** | | |
+| Session-scoped credentials with delegation | Y | Y |
+| SSO (SAML/OIDC) | | Y |
+| RBAC (Admin, Author, Operator, Viewer) | | Y |
+| **Storage** | | |
+| SQLite backends (HITL, credentials, audit, memory) | Y | Y |
+| PostgreSQL backends (HA, connection pooling) | | Y |
+| **Observability** | | |
+| OpenTelemetry tracing | Y | Y |
+| Prometheus `/metrics` endpoint | | Y |
+| Real-time governance dashboard | | Y |
+| SIEM webhook (Splunk, Datadog, Elastic) | | Y |
+| Policy intelligence dashboard (analytics) | | Y |
+| **Operations** | | |
+| Starter policy library | Y | Y |
+| Governance Gateway (centralized HTTP API) | | Y |
+| Orchestrator (multi-agent delegation coordination) | | Y |
+| Compliance export packs (SOC 2, HIPAA, FedRAMP) | | Y |
+| Agent fleet management | | Y |
+| Multi-tenant policy isolation | | Y |
+| Policy simulation / what-if analysis | | Y |
+| Governance marketplace (compliance packs) | | Y |
+| **Framework Adapters** | | |
+| OpenAI, LangChain, CrewAI, OpenAI Agents SDK, LangGraph | Y | Y |
+| Google ADK, PydanticAI, LlamaIndex, Semantic Kernel, Haystack, Dify | Y | Y |
+| **HITL** | | |
+| HITL queue (high-stakes escalation) | Y | Y |
+| Anchor API (REST endpoints for HITL approval) | | Y |
+| HITL SLA tracking | | Y |
+
+For enterprise licensing: [licensing@kitelogik.com](mailto:licensing@kitelogik.com)
+
+## Development
+
+```bash
+python -m venv .venv && .venv/bin/pip install -e ".[dev]"
+docker compose up -d opa    # start OPA policy engine
+
+make test           # 681+ tests
+make lint           # ruff check + format
+
+# Policy management
+kitelogik compile kitelogik/policies/examples/example_rules.yaml   # YAML → Rego
+kitelogik validate                                        # check Rego syntax
+kitelogik compliance                                      # OWASP ASI audit
+
+# Benchmark gate latency (requires OPA running)
+python dev/benchmark.py
+```
+
+## Requirements
+
+- Python 3.11+
+- Docker (for OPA policy engine) — `docker compose up -d opa`
+- No API key needed for `quickstart.py` or policy testing
+
+## Further Reading
+
+- [Architecture & Threat Model](docs/architecture.md)
+- [Contributing](CONTRIBUTING.md)
+- [Security Policy](SECURITY.md)
+
+---
+
+**Kite Logik** — The governance control plane for AI agents.

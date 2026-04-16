@@ -1,0 +1,1030 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kite Logik — AI Agent Governance Infrastructure</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%234a9eff'/><polygon points='16,4 28,11 28,21 16,28 4,21 4,11' fill='none' stroke='white' stroke-width='2.5'/></svg>">
+  <meta name="description" content="The only governance layer that enforces business rules at the tool execution layer. Policy-as-Code for enterprise AI agents.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #07070f;
+      --bg-dot:    #0f0f20;
+      --surf:      #0c0c1e;
+      --surf-hi:   #111130;
+      --border:    #1c1c38;
+      --border-sub:#141430;
+      --tx:        #e0e0f0;
+      --tx-2:      #6868a0;
+      --tx-3:      #3a3a60;
+      --green:     #00d97e;
+      --green-dim: #00261a;
+      --red:       #ff4757;
+      --red-dim:   #2a0a10;
+      --amber:     #ffb700;
+      --amber-dim: #261e00;
+      --blue:      #4a9eff;
+      --blue-dim:  #0a1e40;
+      --radius:    8px;
+      --radius-lg: 14px;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background-color: var(--bg);
+      background-image: radial-gradient(circle at 1px 1px, var(--bg-dot) 1.5px, transparent 0);
+      background-size: 28px 28px;
+      color: var(--tx);
+      font-size: 16px;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .mono { font-family: 'JetBrains Mono', monospace; }
+    .container { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 11px 22px; border-radius: var(--radius);
+      font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 500;
+      cursor: pointer; transition: all 0.18s; text-decoration: none; white-space: nowrap;
+    }
+    .btn-primary { background: var(--blue); color: #fff; border: 1px solid var(--blue); }
+    .btn-primary:hover { background: #6aaeff; border-color: #6aaeff; transform: translateY(-1px); box-shadow: 0 6px 24px rgba(74,158,255,.25); }
+    .btn-ghost { background: transparent; color: var(--tx); border: 1px solid var(--border); }
+    .btn-ghost:hover { border-color: var(--tx-2); background: var(--surf); transform: translateY(-1px); }
+    .btn-green { background: var(--green); color: #000; border: 1px solid var(--green); font-weight: 600; }
+    .btn-green:hover { background: #1fffa0; border-color: #1fffa0; transform: translateY(-1px); box-shadow: 0 6px 24px rgba(0,217,126,.25); }
+
+    /* ── Reveal animations ─────────────────────────────────────────────────── */
+    .reveal { opacity: 0; transform: translateY(22px); transition: opacity .55s cubic-bezier(.22,.68,0,1.2), transform .55s cubic-bezier(.22,.68,0,1.2); }
+    .reveal.visible { opacity: 1; transform: translateY(0); }
+    .reveal-delay-1 { transition-delay: .08s; }
+    .reveal-delay-2 { transition-delay: .16s; }
+    .reveal-delay-3 { transition-delay: .24s; }
+    .reveal-delay-4 { transition-delay: .32s; }
+
+    /* ── Nav ───────────────────────────────────────────────────────────────── */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      border-bottom: 1px solid var(--border-sub);
+      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      background: rgba(7,7,15,.82);
+    }
+    .nav-inner { display: flex; align-items: center; justify-content: space-between; height: 62px; gap: 24px; }
+    .nav-logo {
+      display: flex; align-items: center; gap: 10px;
+      font-family: 'Bricolage Grotesque', sans-serif;
+      font-size: 18px; font-weight: 700; color: var(--tx); text-decoration: none;
+      white-space: nowrap;
+    }
+    .logo-mark {
+      width: 30px; height: 30px; background: var(--blue);
+      border-radius: 6px; display: flex; align-items: center; justify-content: center;
+    }
+    .nav-badge {
+      font-family: 'JetBrains Mono', monospace; font-size: 10px;
+      color: var(--green); border: 1px solid var(--green); background: var(--green-dim);
+      padding: 2px 8px; border-radius: 100px; letter-spacing: .08em; text-transform: uppercase;
+      white-space: nowrap;
+    }
+    .nav-links { display: flex; align-items: center; gap: 28px; }
+    .nav-links a { color: var(--tx-2); font-size: 14px; text-decoration: none; transition: color .15s; }
+    .nav-links a:hover { color: var(--tx); }
+    .nav-right { display: flex; align-items: center; gap: 12px; }
+
+    /* ── Hero ──────────────────────────────────────────────────────────────── */
+    .hero { padding: 148px 0 100px; display: grid; grid-template-columns: 1fr 1fr; gap: 60px; align-items: center; }
+    .hero-label {
+      font-family: 'JetBrains Mono', monospace; font-size: 11px;
+      color: var(--blue); letter-spacing: .12em; text-transform: uppercase;
+      margin-bottom: 24px; display: flex; align-items: center; gap: 10px;
+    }
+    .hero-label::before { content: ''; display: inline-block; width: 24px; height: 1px; background: var(--blue); }
+    .hero h1 {
+      font-family: 'Bricolage Grotesque', sans-serif;
+      font-size: clamp(36px,4.5vw,58px); font-weight: 800; line-height: 1.08;
+      letter-spacing: -.02em; color: var(--tx); margin-bottom: 24px;
+    }
+    .hero h1 .accent { color: var(--green); }
+    .hero-sub { font-size: 17px; color: var(--tx-2); line-height: 1.65; margin-bottom: 36px; max-width: 460px; }
+    .hero-sub strong { color: var(--tx); font-weight: 500; }
+    .hero-ctas { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 48px; }
+    .hero-footnote { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--tx-3); display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+    .hero-footnote span { display: flex; align-items: center; gap: 6px; }
+    .dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+    .dot-green { background: var(--green); }
+    .dot-blue  { background: var(--blue);  }
+    .dot-amber { background: var(--amber); }
+    .sep { color: var(--tx-3); }
+
+    /* ── Terminal ──────────────────────────────────────────────────────────── */
+    .terminal-wrap {
+      background: var(--surf); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); overflow: hidden;
+      box-shadow: 0 32px 80px rgba(0,0,0,.5), 0 0 0 1px rgba(255,255,255,.04) inset;
+    }
+    .terminal-bar {
+      display: flex; align-items: center; gap: 8px;
+      padding: 12px 16px; background: var(--surf-hi);
+      border-bottom: 1px solid var(--border-sub);
+    }
+    .t-dot { width: 11px; height: 11px; border-radius: 50%; }
+    .t-dot-r { background: #ff5f56; }
+    .t-dot-a { background: #ffbd2e; }
+    .t-dot-g { background: #27c93f; }
+    .terminal-title { margin-left: auto; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--tx-3); }
+    .terminal-body { padding: 20px; font-family: 'JetBrains Mono', monospace; font-size: 12.5px; line-height: 1.7; min-height: 270px; overflow-y: auto; }
+    .t-line { display: flex; gap: 8px; align-items: baseline; }
+    .t-prompt { color: var(--tx-3); flex-shrink: 0; }
+    .t-cmd { color: var(--tx); }
+    .t-info { color: var(--tx-2); font-size: 11.5px; }
+    .t-allow { color: var(--green); font-weight: 600; }
+    .t-block { color: var(--red);   font-weight: 600; }
+    .t-hitl  { color: var(--amber); font-weight: 600; }
+    .t-indent { padding-left: 16px; }
+    .t-cursor { display: inline-block; width: 7px; height: 13px; background: var(--blue); vertical-align: middle; animation: blink 1s step-end infinite; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+    /* ── Stats bar ─────────────────────────────────────────────────────────── */
+    .stats-bar { border-top: 1px solid var(--border-sub); border-bottom: 1px solid var(--border-sub); }
+    .stats-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 1px; background: var(--border-sub); }
+    .stat-item { background: var(--bg); padding: 32px; }
+    .stat-num { font-family: 'Bricolage Grotesque', sans-serif; font-size: 44px; font-weight: 800; line-height: 1; color: var(--tx); margin-bottom: 6px; }
+    .stat-num-accent { color: var(--blue); }
+    .stat-label { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--tx-2); text-transform: uppercase; letter-spacing: .08em; }
+
+    /* ── Section base ──────────────────────────────────────────────────────── */
+    section { padding: 100px 0; }
+    .section-label { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--blue); letter-spacing: .12em; text-transform: uppercase; margin-bottom: 16px; }
+    .section-heading { font-family: 'Bricolage Grotesque', sans-serif; font-size: clamp(28px,3vw,42px); font-weight: 800; line-height: 1.12; letter-spacing: -.02em; color: var(--tx); margin-bottom: 20px; }
+    .section-sub { font-size: 17px; color: var(--tx-2); line-height: 1.65; max-width: 560px; }
+
+    /* ── Problem section ───────────────────────────────────────────────────── */
+    .problem-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; background: var(--border-sub); border-radius: var(--radius-lg); overflow: hidden; margin-top: 56px; }
+    .problem-col { background: var(--surf); padding: 44px; }
+    .problem-col-good { background: rgba(0,217,126,.02); }
+    .problem-col-head { display: flex; align-items: center; gap: 12px; margin-bottom: 32px; }
+    .problem-icon { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 15px; flex-shrink: 0; font-weight: 700; }
+    .problem-icon-bad  { background: var(--red-dim);   border: 1px solid var(--red);   color: var(--red); }
+    .problem-icon-good { background: var(--green-dim); border: 1px solid var(--green); color: var(--green); }
+    .problem-col-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 18px; font-weight: 700; color: var(--tx); }
+    .problem-col-sub { font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 400; color: var(--tx-2); text-transform: uppercase; letter-spacing: .08em; margin-top: 3px; }
+    .problem-items { display: flex; flex-direction: column; gap: 14px; }
+    .problem-item { display: flex; gap: 14px; align-items: flex-start; padding: 16px; border-radius: var(--radius); background: rgba(255,255,255,.025); border: 1px solid var(--border-sub); }
+    .problem-item-icon { font-size: 14px; flex-shrink: 0; margin-top: 1px; }
+    .problem-item-title { font-size: 14px; font-weight: 600; color: var(--tx); margin-bottom: 2px; }
+    .problem-item-body { font-size: 13px; color: var(--tx-2); line-height: 1.5; }
+
+    /* ── Layer cards ───────────────────────────────────────────────────────── */
+    .layer-cards { display: grid; grid-template-columns: repeat(3,1fr); gap: 2px; background: var(--border-sub); border-radius: var(--radius-lg); overflow: hidden; }
+    .layer-card { background: var(--surf); padding: 40px; position: relative; overflow: hidden; }
+    .layer-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; }
+    .layer-tether::before { background: var(--green); }
+    .layer-anchor::before { background: var(--amber); }
+    .layer-sandbox::before { background: var(--blue);  }
+    .layer-number { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--tx-3); text-transform: uppercase; letter-spacing: .1em; margin-bottom: 20px; }
+    .layer-icon { width: 48px; height: 48px; border-radius: var(--radius); display: flex; align-items: center; justify-content: center; margin-bottom: 20px; font-size: 22px; }
+    .layer-tether  .layer-icon { background: var(--green-dim); color: var(--green); }
+    .layer-anchor  .layer-icon { background: var(--amber-dim); color: var(--amber); }
+    .layer-sandbox .layer-icon { background: var(--blue-dim);  color: var(--blue); }
+    .layer-name { font-family: 'Bricolage Grotesque', sans-serif; font-size: 22px; font-weight: 800; color: var(--tx); margin-bottom: 6px; }
+    .layer-tagline { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--tx-2); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 16px; }
+    .layer-desc { font-size: 14px; color: var(--tx-2); line-height: 1.65; }
+
+    /* ── Flow diagram ──────────────────────────────────────────────────────── */
+    .flow-diagram { display: flex; align-items: center; gap: 0; margin: 56px 0 60px; padding: 0 20px; }
+    .flow-node { background: var(--surf); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 18px 22px; text-align: center; min-width: 110px; }
+    .flow-node-blue { border-color: var(--blue); }
+    .flow-node-green { border-color: var(--green); }
+    .flow-node-amber { border-color: var(--amber); }
+    .flow-node-icon { font-size: 20px; margin-bottom: 6px; display: flex; align-items: center; justify-content: center; }
+    .flow-node-blue  .flow-node-icon { color: var(--blue); }
+    .flow-node-green .flow-node-icon { color: var(--green); }
+    .flow-node-amber .flow-node-icon { color: var(--amber); }
+    .flow-node:not([class*="blue"]):not([class*="green"]):not([class*="amber"]) .flow-node-icon { color: var(--tx-2); }
+    .flow-node-name { font-family: 'Bricolage Grotesque', sans-serif; font-size: 13px; font-weight: 700; color: var(--tx); }
+    .flow-node-sub  { font-family: 'JetBrains Mono', monospace; font-size: 9px; color: var(--tx-3); text-transform: uppercase; letter-spacing: .06em; margin-top: 2px; }
+    .flow-arrow { flex: 1; position: relative; height: 1px; background: var(--border); min-width: 30px; }
+    .flow-arrow::after { content: ''; position: absolute; right: -1px; top: 50%; transform: translateY(-50%); border: 5px solid transparent; border-left-color: var(--border); }
+    .flow-arrow-lbl { position: absolute; top: -20px; left: 50%; transform: translateX(-50%); font-family: 'JetBrains Mono', monospace; font-size: 10px; white-space: nowrap; letter-spacing: .04em; }
+    .lbl-allow { color: var(--green); }
+    .lbl-hitl  { color: var(--amber); }
+
+    /* ── Risk tiers ────────────────────────────────────────────────────────── */
+    .tiers-table { width: 100%; border-collapse: collapse; margin-top: 48px; }
+    .tiers-table th { font-family: 'JetBrains Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: .1em; color: var(--tx-3); padding: 14px 20px; text-align: left; border-bottom: 1px solid var(--border); }
+    .tiers-table td { padding: 18px 20px; border-bottom: 1px solid var(--border-sub); font-size: 14px; }
+    .tiers-table tr:last-child td { border-bottom: none; }
+    .tiers-table tbody tr:hover { background: rgba(255,255,255,.02); }
+    .tier-badge { display: inline-flex; align-items: center; font-family: 'JetBrains Mono', monospace; font-size: 11px; padding: 4px 10px; border-radius: 4px; font-weight: 600; }
+    .tier-1 { background: #0d2020; color: #4dd; border: 1px solid #1a4040; }
+    .tier-2 { background: #102010; color: #4d9; border: 1px solid #1a4020; }
+    .tier-3 { background: var(--amber-dim); color: var(--amber); border: 1px solid #402800; }
+    .tier-4 { background: #201010; color: #f76; border: 1px solid #402020; }
+    .tier-5 { background: var(--red-dim); color: var(--red); border: 1px solid #501020; }
+    .tier-name { font-weight: 600; color: var(--tx); }
+    .tier-examples { color: var(--tx-2); font-size: 13px; }
+    .outcome { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; }
+    .outcome-allow { color: var(--green); }
+    .outcome-hitl  { color: var(--amber); }
+    .outcome-block { color: var(--red);   }
+
+    /* ── Code section ──────────────────────────────────────────────────────── */
+    .code-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 60px; align-items: start; margin-top: 56px; }
+    .code-window { background: #040410; border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; box-shadow: 0 24px 60px rgba(0,0,0,.4); }
+    .code-window-bar { display: flex; align-items: center; gap: 8px; padding: 12px 16px; background: #080818; border-bottom: 1px solid var(--border-sub); }
+    .code-file { margin-left: 8px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--tx-2); }
+    .code-body { padding: 24px; overflow-x: auto; }
+    .code-body pre { font-family: 'JetBrains Mono', monospace; font-size: 12.5px; line-height: 1.8; margin: 0; }
+    /* Rego syntax colours */
+    .kw  { color: #cc99cd; }
+    .str { color: #7ec8e3; }
+    .fn  { color: #ffffb6; }
+    .cmt { color: #3a3a60; font-style: italic; }
+    .num { color: #f9cb8b; }
+    .pkg { color: #a8d8a8; }
+    .op  { color: var(--tx-2); }
+
+    .code-benefits { display: flex; flex-direction: column; gap: 24px; }
+    .code-benefit { display: flex; gap: 16px; align-items: flex-start; padding: 22px; background: var(--surf); border: 1px solid var(--border); border-radius: var(--radius); }
+    .benefit-icon { width: 38px; height: 38px; border-radius: var(--radius); flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+    .benefit-text h4 { font-size: 15px; font-weight: 600; color: var(--tx); margin-bottom: 4px; }
+    .benefit-text p  { font-size: 13px; color: var(--tx-2); line-height: 1.55; }
+    .inline-code { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--green); }
+
+    /* ── Comparison ────────────────────────────────────────────────────────── */
+    .compare-table { width: 100%; border-collapse: collapse; margin-top: 48px; }
+    .compare-table th { font-family: 'JetBrains Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: .1em; color: var(--tx-3); padding: 14px 18px; text-align: left; border-bottom: 1px solid var(--border); }
+    .compare-table td { padding: 16px 18px; border-bottom: 1px solid var(--border-sub); font-size: 13.5px; color: var(--tx-2); }
+    .compare-table td.col-name { color: var(--tx); font-weight: 500; }
+    .compare-table tr.hl-row td { background: rgba(74,158,255,.04); }
+    .compare-table tr.hl-row td.col-name { color: var(--blue); }
+    .compare-table tr:last-child td { border-bottom: none; }
+    .c-yes { color: var(--green); font-weight: 600; }
+    .c-no  { color: var(--tx-3); }
+    .c-part { color: var(--amber); }
+    .layer-tag { display: inline-block; font-family: 'JetBrains Mono', monospace; font-size: 10px; padding: 2px 8px; border-radius: 4px; background: var(--surf-hi); border: 1px solid var(--border); color: var(--tx-2); }
+    .layer-tag-tool { background: var(--green-dim); border-color: var(--green); color: var(--green); }
+
+    /* ── CTA section ───────────────────────────────────────────────────────── */
+    .cta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; background: var(--border-sub); border-radius: var(--radius-lg); overflow: hidden; margin-top: 56px; }
+    .cta-card { background: var(--surf); padding: 52px; }
+    .cta-card-ent { background: linear-gradient(135deg, var(--surf) 0%, rgba(74,158,255,.05) 100%); }
+    .cta-badge { display: inline-flex; align-items: center; gap: 6px; font-family: 'JetBrains Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: .1em; padding: 4px 12px; border-radius: 100px; margin-bottom: 28px; }
+    .cta-badge-os  { background: var(--green-dim); color: var(--green); border: 1px solid var(--green); }
+    .cta-badge-ent { background: var(--blue-dim);  color: var(--blue);  border: 1px solid var(--blue);  }
+    .cta-card h3 { font-family: 'Bricolage Grotesque', sans-serif; font-size: 28px; font-weight: 800; color: var(--tx); margin-bottom: 12px; }
+    .cta-card p { font-size: 15px; color: var(--tx-2); line-height: 1.65; margin-bottom: 32px; max-width: 380px; }
+    .cta-features { display: flex; flex-direction: column; gap: 10px; margin-bottom: 36px; }
+    .cta-feat { display: flex; align-items: center; gap: 10px; font-size: 13.5px; color: var(--tx-2); }
+    .feat-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+    .feat-dot-green { background: var(--green); }
+    .feat-dot-blue  { background: var(--blue);  }
+
+    /* ── Quote block ───────────────────────────────────────────────────────── */
+    .quote-block { margin-top: 72px; text-align: center; padding: 52px; background: var(--surf); border: 1px solid var(--border); border-radius: var(--radius-lg); }
+    .quote-text { font-family: 'Bricolage Grotesque', sans-serif; font-size: clamp(22px,2.5vw,32px); font-weight: 800; color: var(--tx); line-height: 1.2; margin-bottom: 16px; }
+    .quote-text-accent { color: var(--green); }
+    .quote-sub { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--tx-3); letter-spacing: .06em; text-transform: uppercase; }
+
+    /* ── Footer ────────────────────────────────────────────────────────────── */
+    footer { border-top: 1px solid var(--border-sub); padding: 48px 0; }
+    .footer-inner { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+    .footer-logo { font-family: 'Bricolage Grotesque', sans-serif; font-size: 16px; font-weight: 700; color: var(--tx-2); display: flex; align-items: center; gap: 8px; }
+    .footer-copy { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--tx-3); }
+    .footer-links { display: flex; gap: 24px; }
+    .footer-links a { font-size: 13px; color: var(--tx-2); text-decoration: none; transition: color .15s; }
+    .footer-links a:hover { color: var(--tx); }
+
+    /* ── Responsive ────────────────────────────────────────────────────────── */
+    @media (max-width: 900px) {
+      .hero { grid-template-columns: 1fr; gap: 48px; padding: 120px 0 72px; }
+      .layer-cards { grid-template-columns: 1fr; }
+      .code-grid { grid-template-columns: 1fr; }
+      .cta-grid { grid-template-columns: 1fr; }
+      .problem-grid { grid-template-columns: 1fr; }
+      .stats-grid { grid-template-columns: repeat(2,1fr); }
+      .nav-links { display: none; }
+      .flow-diagram { display: none; }
+      .footer-inner { flex-direction: column; align-items: flex-start; gap: 16px; }
+    }
+    @media (max-width: 480px) {
+      .stats-grid { grid-template-columns: 1fr; }
+      .compare-table th:nth-child(n+4), .compare-table td:nth-child(n+4) { display: none; }
+      .hero { padding-bottom: 48px; }
+      .nav-logo { font-size: 15px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Nav ─────────────────────────────────────────────────────────────────── -->
+<nav>
+  <div class="container nav-inner">
+    <a href="#" class="nav-logo">
+      <div class="logo-mark">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path d="M8 2L14 5.5V10.5L8 14L2 10.5V5.5L8 2Z" stroke="white" stroke-width="1.5"/>
+          <path d="M8 6L10.5 7.5V10.5L8 12L5.5 10.5V7.5L8 6Z" fill="white"/>
+        </svg>
+      </div>
+      Kite Logik
+    </a>
+    <div class="nav-links">
+      <a href="#how-it-works">How it works</a>
+      <a href="#policy">Policy-as-Code</a>
+      <a href="#compare">Compare</a>
+      <a href="#access">Access</a>
+    </div>
+    <div class="nav-right">
+      <span class="nav-badge">Open Source</span>
+      <a href="#access" class="btn btn-primary" style="padding:8px 18px;font-size:13px;">Get Early Access</a>
+    </div>
+  </div>
+</nav>
+
+<!-- ── Hero ────────────────────────────────────────────────────────────────── -->
+<section style="padding:0;">
+  <div class="container">
+    <div class="hero">
+      <div>
+        <div class="hero-label reveal">Governance Infrastructure for AI Agents</div>
+        <h1 class="reveal reveal-delay-1">
+          AI agents with boundaries your
+          <span class="accent">compliance team can read.</span>
+        </h1>
+        <p class="hero-sub reveal reveal-delay-2">
+          The only governance layer that enforces business rules at the
+          <strong>tool execution layer</strong> — before your agent acts, every time.
+          Not a prompt. A policy engine.
+        </p>
+        <div class="hero-ctas reveal reveal-delay-3">
+          <a href="https://github.com" class="btn btn-ghost">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
+            View on GitHub
+          </a>
+          <a href="#access" class="btn btn-primary">
+            Get Early Access
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </a>
+        </div>
+        <div class="hero-footnote reveal reveal-delay-4">
+          <span><span class="dot dot-green"></span> 369 tests passing</span>
+          <span class="sep">·</span>
+          <span><span class="dot dot-blue"></span> Open source core</span>
+          <span class="sep">·</span>
+          <span><span class="dot dot-amber"></span> &lt;8ms gate latency</span>
+        </div>
+      </div>
+
+      <!-- Terminal (DOM-built by JS) -->
+      <div class="terminal-wrap reveal reveal-delay-2">
+        <div class="terminal-bar">
+          <div class="t-dot t-dot-r"></div>
+          <div class="t-dot t-dot-a"></div>
+          <div class="t-dot t-dot-g"></div>
+          <div class="terminal-title">kitelogik · policy gate · live</div>
+        </div>
+        <div class="terminal-body" id="terminal-body" role="log" aria-label="Policy gate demo" aria-live="polite"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Stats bar ────────────────────────────────────────────────────────────── -->
+<div class="stats-bar">
+  <div class="container">
+    <div class="stats-grid">
+      <div class="stat-item reveal">
+        <div class="stat-num">369</div>
+        <div class="stat-label">Tests passing</div>
+      </div>
+      <div class="stat-item reveal reveal-delay-1">
+        <div class="stat-num">3</div>
+        <div class="stat-label">Enforcement layers</div>
+      </div>
+      <div class="stat-item reveal reveal-delay-2">
+        <div class="stat-num">5</div>
+        <div class="stat-label">Risk tiers</div>
+      </div>
+      <div class="stat-item reveal reveal-delay-3">
+        <div class="stat-num"><span class="stat-num-accent">&lt;</span>8<span style="font-size:24px;color:var(--tx-2)">ms</span></div>
+        <div class="stat-label">Gate latency (warm)</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Problem ──────────────────────────────────────────────────────────────── -->
+<section>
+  <div class="container">
+    <div class="section-label reveal">The problem</div>
+    <h2 class="section-heading reveal reveal-delay-1">The prompt layer is the wrong place<br>to enforce rules.</h2>
+    <p class="section-sub reveal reveal-delay-2">Every AI safety tool in this space operates at the wrong layer. Prompts can be overridden, confused, and manipulated. Infrastructure cannot.</p>
+    <div class="problem-grid">
+      <div class="problem-col reveal">
+        <div class="problem-col-head">
+          <div class="problem-icon problem-icon-bad">✕</div>
+          <div>
+            <div class="problem-col-title">Prompt-level enforcement</div>
+            <div class="problem-col-sub">The industry default</div>
+          </div>
+        </div>
+        <div class="problem-items">
+          <div class="problem-item">
+            <div class="problem-item-icon">⚠</div>
+            <div>
+              <div class="problem-item-title">Rules are instructions, not locks</div>
+              <div class="problem-item-body">"Do not approve refunds over $500" is advice. The model can be talked out of it.</div>
+            </div>
+          </div>
+          <div class="problem-item">
+            <div class="problem-item-icon">⚠</div>
+            <div>
+              <div class="problem-item-title">Prompt injection bypasses everything</div>
+              <div class="problem-item-body">Malicious content in a tool response can override your safety instructions wholesale.</div>
+            </div>
+          </div>
+          <div class="problem-item">
+            <div class="problem-item-icon">⚠</div>
+            <div>
+              <div class="problem-item-title">No audit trail an auditor can trust</div>
+              <div class="problem-item-body">"The model said it followed the rules" is not a compliance artefact.</div>
+            </div>
+          </div>
+          <div class="problem-item">
+            <div class="problem-item-icon">⚠</div>
+            <div>
+              <div class="problem-item-title">Non-deterministic by design</div>
+              <div class="problem-item-body">Safety properties degrade with every model update — without your control.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="problem-col problem-col-good reveal reveal-delay-1">
+        <div class="problem-col-head">
+          <div class="problem-icon problem-icon-good">✓</div>
+          <div>
+            <div class="problem-col-title">Infrastructure-level enforcement</div>
+            <div class="problem-col-sub">Kite Logik</div>
+          </div>
+        </div>
+        <div class="problem-items">
+          <div class="problem-item" style="border-color:var(--border);">
+            <div class="problem-item-icon" style="color:var(--green);">✓</div>
+            <div>
+              <div class="problem-item-title">Rules are evaluated by a policy engine</div>
+              <div class="problem-item-body">OPA evaluates every tool call before it runs. The model never gets a vote on the outcome.</div>
+            </div>
+          </div>
+          <div class="problem-item" style="border-color:var(--border);">
+            <div class="problem-item-icon" style="color:var(--green);">✓</div>
+            <div>
+              <div class="problem-item-title">Injection-resistant by architecture</div>
+              <div class="problem-item-body">Tool outputs are sanitised before reaching agent context. Enforcement is out-of-band.</div>
+            </div>
+          </div>
+          <div class="problem-item" style="border-color:var(--border);">
+            <div class="problem-item-icon" style="color:var(--green);">✓</div>
+            <div>
+              <div class="problem-item-title">Every action logged, every decision traceable</div>
+              <div class="problem-item-body">Full OpenTelemetry trace per session — tool call, policy decision, human approval.</div>
+            </div>
+          </div>
+          <div class="problem-item" style="border-color:var(--border);">
+            <div class="problem-item-icon" style="color:var(--green);">✓</div>
+            <div>
+              <div class="problem-item-title">Deterministic and model-agnostic</div>
+              <div class="problem-item-body">Policy outcome is identical regardless of which model is running the agent.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── How it works ─────────────────────────────────────────────────────────── -->
+<section id="how-it-works" style="padding-top:0;">
+  <div class="container">
+    <div class="section-label reveal">Architecture</div>
+    <h2 class="section-heading reveal reveal-delay-1">Three interlocking enforcement layers.</h2>
+    <p class="section-sub reveal reveal-delay-2">Each layer has a distinct role. Together they make it structurally impossible for an agent to violate policy — regardless of what it's told.</p>
+
+    <div class="flow-diagram reveal">
+      <div class="flow-node flow-node-blue">
+        <div class="flow-node-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="7" width="10" height="10" rx="1"/><path d="M9 7V4M12 7V4M15 7V4M9 17v3M12 17v3M15 17v3M7 9H4M7 12H4M7 15H4M17 9h3M17 12h3M17 15h3"/></svg></div>
+        <div class="flow-node-name">Agent</div>
+        <div class="flow-node-sub">tool call</div>
+      </div>
+      <div class="flow-arrow">
+        <div class="flow-arrow-lbl" style="color:var(--tx-3);">every call</div>
+      </div>
+      <div class="flow-node flow-node-green">
+        <div class="flow-node-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg></div>
+        <div class="flow-node-name">Tether</div>
+        <div class="flow-node-sub">policy gate</div>
+      </div>
+      <div class="flow-arrow">
+        <div class="flow-arrow-lbl lbl-allow">ALLOW</div>
+      </div>
+      <div class="flow-node">
+        <div class="flow-node-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg></div>
+        <div class="flow-node-name">Tool</div>
+        <div class="flow-node-sub">executes</div>
+      </div>
+      <div class="flow-arrow">
+        <div class="flow-arrow-lbl lbl-hitl">HITL</div>
+      </div>
+      <div class="flow-node flow-node-amber">
+        <div class="flow-node-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
+        <div class="flow-node-name">Anchor</div>
+        <div class="flow-node-sub">human review</div>
+      </div>
+    </div>
+
+    <div class="layer-cards">
+      <div class="layer-card layer-tether reveal">
+        <div class="layer-number">Layer 01</div>
+        <div class="layer-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg></div>
+        <div class="layer-name">Tether</div>
+        <div class="layer-tagline">Policy Gate · OPA / Rego</div>
+        <div class="layer-desc">Every tool call is evaluated against your Rego policies before execution. ALLOW, escalate to HITL, or BLOCK — decided in under 8ms. Policies are version-controlled code, not config files.</div>
+      </div>
+      <div class="layer-card layer-anchor reveal reveal-delay-1">
+        <div class="layer-number">Layer 02</div>
+        <div class="layer-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="3"/><line x1="12" y1="8" x2="12" y2="22"/><path d="M5 12H2a10 10 0 0020 0h-3"/></svg></div>
+        <div class="layer-name">Anchor</div>
+        <div class="layer-tagline">HITL Queue · Async by default</div>
+        <div class="layer-desc">High-risk actions are escalated to a human reviewer before execution. The agent waits asynchronously — no unsafe fallback, no timeout bypass. Every approval is logged with reviewer identity and timestamp.</div>
+      </div>
+      <div class="layer-card layer-sandbox reveal reveal-delay-2">
+        <div class="layer-number">Layer 03</div>
+        <div class="layer-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg></div>
+        <div class="layer-name">Sandbox</div>
+        <div class="layer-tagline">Container Isolation · Docker / Firecracker</div>
+        <div class="layer-desc">Each agent session runs in an isolated container with no egress by default. One compromised session cannot reach another. Firecracker MicroVM provides hardware-enforced isolation in production.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Risk Tiers ───────────────────────────────────────────────────────────── -->
+<section style="padding-top:0;">
+  <div class="container">
+    <div class="section-label reveal">Enforcement model</div>
+    <h2 class="section-heading reveal reveal-delay-1">Five risk tiers. One policy engine.</h2>
+    <p class="section-sub reveal reveal-delay-2">Every action is classified at evaluation time. Tier determines the default enforcement outcome — and you can override any default per action in Rego.</p>
+    <div class="reveal">
+      <table class="tiers-table">
+        <thead>
+          <tr>
+            <th>Tier</th>
+            <th>Name</th>
+            <th>Examples</th>
+            <th>Default outcome</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="tier-badge tier-1">01</span></td>
+            <td><span class="tier-name">INFORMATIONAL</span></td>
+            <td class="tier-examples">Read customer record, list transactions, status lookups</td>
+            <td><span class="outcome outcome-allow">● Auto-allow</span></td>
+          </tr>
+          <tr>
+            <td><span class="tier-badge tier-2">02</span></td>
+            <td><span class="tier-name">OPERATIONAL</span></td>
+            <td class="tier-examples">Update record, send notification, write to memory</td>
+            <td><span class="outcome outcome-allow">● Allow with scope</span></td>
+          </tr>
+          <tr>
+            <td><span class="tier-badge tier-3">03</span></td>
+            <td><span class="tier-name">TRANSACTIONAL_HIGH</span></td>
+            <td class="tier-examples">Approve refund &gt; $1000, wire transfer, contract execution</td>
+            <td><span class="outcome outcome-hitl">● HITL escalation</span></td>
+          </tr>
+          <tr>
+            <td><span class="tier-badge tier-4">04</span></td>
+            <td><span class="tier-name">DESTRUCTIVE</span></td>
+            <td class="tier-examples">Delete records, bulk operations, drop table, revoke access</td>
+            <td><span class="outcome outcome-hitl">● HITL or block</span></td>
+          </tr>
+          <tr>
+            <td><span class="tier-badge tier-5">05</span></td>
+            <td><span class="tier-name">SECURITY_CRITICAL</span></td>
+            <td class="tier-examples">Shell exec, credentials access, file system ops, network sockets</td>
+            <td><span class="outcome outcome-block">✕ Hard block</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ── Policy-as-Code ────────────────────────────────────────────────────────── -->
+<section id="policy" style="padding-top:0;">
+  <div class="container">
+    <div class="section-label reveal">Policy-as-code</div>
+    <h2 class="section-heading reveal reveal-delay-1">Rules your compliance team<br>can actually read.</h2>
+    <p class="section-sub reveal reveal-delay-2">Policies are Rego files — version-controlled, peer-reviewed, tested in CI. Not a vendor config dashboard. Your rules, in code, under your control.</p>
+    <div class="code-grid">
+      <div class="code-window reveal reveal-delay-1">
+        <div class="code-window-bar">
+          <div class="t-dot t-dot-r"></div>
+          <div class="t-dot t-dot-a"></div>
+          <div class="t-dot t-dot-g"></div>
+          <div class="code-file">policies/financial.rego</div>
+        </div>
+        <div class="code-body">
+          <pre id="rego-block"></pre>
+        </div>
+      </div>
+      <div class="code-benefits">
+        <div class="code-benefit reveal reveal-delay-1">
+          <div class="benefit-icon" style="background:var(--green-dim);color:var(--green);"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 01-9 9"/></svg></div>
+          <div class="benefit-text">
+            <h4>Version-controlled and auditable</h4>
+            <p>Every policy change is a git commit. Diffs show exactly what changed and when. Compliance teams can review and approve rule changes like any other code.</p>
+          </div>
+        </div>
+        <div class="code-benefit reveal reveal-delay-2">
+          <div class="benefit-icon" style="background:var(--blue-dim);color:var(--blue);"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6M10 3v6l-5 9a1 1 0 00.9 1.5h12.2a1 1 0 00.9-1.5L14 9V3"/></svg></div>
+          <div class="benefit-text">
+            <h4>Policies have unit tests</h4>
+            <p>Write Rego tests alongside your rules. Run them in CI. Know before deploying that your policy handles the edge cases your agent will find.</p>
+          </div>
+        </div>
+        <div class="code-benefit reveal reveal-delay-3">
+          <div class="benefit-icon" style="background:var(--amber-dim);color:var(--amber);"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div>
+          <div class="benefit-text">
+            <h4>Evaluated in &lt;8ms per call</h4>
+            <p>OPA evaluates policies in-process. The policy gate adds single-digit milliseconds per tool call — enforcement without observable latency cost.</p>
+          </div>
+        </div>
+        <div class="code-benefit reveal reveal-delay-4">
+          <div class="benefit-icon" style="background:var(--surf-hi);color:var(--tx-2);"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg></div>
+          <div class="benefit-text">
+            <h4>Deny-by-default, always</h4>
+            <p>Every policy file starts with <span class="inline-code">default allow := false</span>. Actions are blocked unless a rule explicitly permits them. No accidental open door.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Comparison ───────────────────────────────────────────────────────────── -->
+<section id="compare" style="padding-top:0;">
+  <div class="container">
+    <div class="section-label reveal">Comparison</div>
+    <h2 class="section-heading reveal reveal-delay-1">Every competitor enforces at the wrong layer.</h2>
+    <p class="section-sub reveal reveal-delay-2">NeMo Guardrails, Guardrails AI, AWS Bedrock, LangSmith — all operate on LLM inputs and outputs. None of them intercept the tool call itself.</p>
+    <div class="reveal">
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>Tool</th>
+            <th>Enforcement layer</th>
+            <th>Tool-call interception</th>
+            <th>Policy-as-Code</th>
+            <th>HITL</th>
+            <th>Audit trail</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="hl-row">
+            <td class="col-name">Kite Logik</td>
+            <td><span class="layer-tag layer-tag-tool">Tool execution</span></td>
+            <td class="c-yes">✓ Yes</td>
+            <td class="c-yes">✓ OPA / Rego</td>
+            <td class="c-yes">✓ Async</td>
+            <td class="c-yes">✓ Full session</td>
+          </tr>
+          <tr>
+            <td class="col-name">NVIDIA NeMo Guardrails</td>
+            <td><span class="layer-tag">LLM I/O</span></td>
+            <td class="c-no">✕ No</td>
+            <td class="c-part">~ Colang DSL</td>
+            <td class="c-no">✕ No</td>
+            <td class="c-no">✕ No</td>
+          </tr>
+          <tr>
+            <td class="col-name">Guardrails AI</td>
+            <td><span class="layer-tag">LLM output</span></td>
+            <td class="c-no">✕ No</td>
+            <td class="c-no">✕ No</td>
+            <td class="c-no">✕ No</td>
+            <td class="c-no">✕ No</td>
+          </tr>
+          <tr>
+            <td class="col-name">AWS Bedrock Guardrails</td>
+            <td><span class="layer-tag">Inference</span></td>
+            <td class="c-no">✕ No</td>
+            <td class="c-no">✕ No</td>
+            <td class="c-no">✕ No</td>
+            <td class="c-part">~ Limited</td>
+          </tr>
+          <tr>
+            <td class="col-name">LangSmith</td>
+            <td><span class="layer-tag">Observability</span></td>
+            <td class="c-no">✕ No</td>
+            <td class="c-no">✕ No</td>
+            <td class="c-no">✕ No</td>
+            <td class="c-yes">✓ Tracing</td>
+          </tr>
+          <tr>
+            <td class="col-name">Lakera Guard</td>
+            <td><span class="layer-tag">Prompt / response</span></td>
+            <td class="c-no">✕ No</td>
+            <td class="c-no">✕ No</td>
+            <td class="c-no">✕ No</td>
+            <td class="c-part">~ Limited</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ── CTA ──────────────────────────────────────────────────────────────────── -->
+<section id="access">
+  <div class="container">
+    <div class="section-label reveal">Get started</div>
+    <h2 class="section-heading reveal reveal-delay-1">Open source core.<br>Enterprise-ready.</h2>
+    <p class="section-sub reveal reveal-delay-2">Start with the open source SDK — no account, no API key, no dashboard required. Upgrade to enterprise when you need SSO, managed HITL, and compliance exports.</p>
+    <div class="cta-grid">
+      <div class="cta-card reveal">
+        <div class="cta-badge cta-badge-os">Open Source · v0.1</div>
+        <h3>For developers &amp; platform engineers</h3>
+        <p>Clone the repo, run <span class="inline-code">python quickstart.py</span> and see the policy gate in action in under 5 minutes. No API key needed.</p>
+        <div class="cta-features">
+          <div class="cta-feat"><span class="feat-dot feat-dot-green"></span>Core policy gate (Tether) + OPA integration</div>
+          <div class="cta-feat"><span class="feat-dot feat-dot-green"></span>Basic HITL queue and audit log</div>
+          <div class="cta-feat"><span class="feat-dot feat-dot-green"></span>Docker sandbox lifecycle</div>
+          <div class="cta-feat"><span class="feat-dot feat-dot-green"></span>13-scenario demo with live dashboard</div>
+          <div class="cta-feat"><span class="feat-dot feat-dot-green"></span>369 unit tests + 120 OPA policy tests</div>
+        </div>
+        <a href="https://github.com" class="btn btn-green">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
+          View on GitHub
+        </a>
+      </div>
+      <div class="cta-card cta-card-ent reveal reveal-delay-1">
+        <div class="cta-badge cta-badge-ent">Enterprise · Early Access</div>
+        <h3>For teams deploying agents in production</h3>
+        <p>Self-hosted or managed. Get the enterprise build with SSO, multi-tenant fleet management, signed audit exports, and dedicated support.</p>
+        <div class="cta-features">
+          <div class="cta-feat"><span class="feat-dot feat-dot-blue"></span>Everything in open source</div>
+          <div class="cta-feat"><span class="feat-dot feat-dot-blue"></span>SSO / RBAC (Okta, Azure AD, Google)</div>
+          <div class="cta-feat"><span class="feat-dot feat-dot-blue"></span>Multi-tenant fleet management</div>
+          <div class="cta-feat"><span class="feat-dot feat-dot-blue"></span>Compliance exports (SOC 2, audit dumps)</div>
+          <div class="cta-feat"><span class="feat-dot feat-dot-blue"></span>Dedicated onboarding &amp; SLA support</div>
+        </div>
+        <a href="mailto:hello@kitelogik.com" class="btn btn-primary">
+          Request Early Access
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </a>
+      </div>
+    </div>
+    <div class="quote-block reveal">
+      <div class="quote-text">
+        "A system prompt is a suggestion.<br>
+        <span class="quote-text-accent">Kite Logik is a lock."</span>
+      </div>
+      <div class="quote-sub">Prompts inform. Infrastructure enforces.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Footer ───────────────────────────────────────────────────────────────── -->
+<footer>
+  <div class="container">
+    <div class="footer-inner">
+      <div class="footer-logo">
+        <div class="logo-mark" style="width:24px;height:24px;">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M8 2L14 5.5V10.5L8 14L2 10.5V5.5L8 2Z" stroke="white" stroke-width="1.5"/>
+            <path d="M8 6L10.5 7.5V10.5L8 12L5.5 10.5V7.5L8 6Z" fill="white"/>
+          </svg>
+        </div>
+        Kite Logik
+      </div>
+      <div class="footer-links">
+        <a href="https://github.com">GitHub</a>
+        <a href="#">Documentation</a>
+        <a href="mailto:hello@kitelogik.com">Contact</a>
+      </div>
+      <div class="footer-copy">
+        <span class="mono">v0.1.0</span> · Apache 2.0 Open Source
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script>
+  // ── Reveal on scroll ────────────────────────────────────────────────────────
+  const observer = new IntersectionObserver(
+    (entries) => entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); }),
+    { threshold: 0.1, rootMargin: '0px 0px -40px 0px' }
+  );
+  document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+  // ── Nav border on scroll ────────────────────────────────────────────────────
+  const navEl = document.querySelector('nav');
+  window.addEventListener('scroll', () => {
+    navEl.style.borderBottomColor = window.scrollY > 10 ? 'var(--border)' : 'var(--border-sub)';
+  }, { passive: true });
+
+  // ── Rego code block (DOM-safe, no innerHTML) ────────────────────────────────
+  (function buildRego() {
+    const pre = document.getElementById('rego-block');
+    if (!pre) return;
+
+    function span(cls, text) {
+      const s = document.createElement('span');
+      s.className = cls;
+      s.textContent = text;
+      return s;
+    }
+    function txt(t)  { return document.createTextNode(t); }
+    function nl()    { return document.createTextNode('\n'); }
+
+    const lines = [
+      [span('kw','package'), txt(' '), span('pkg','kitelogik.financial')],
+      [],
+      [span('kw','import'), txt(' future.keywords.if')],
+      [span('kw','import'), txt(' future.keywords.in')],
+      [],
+      [span('cmt','# Deny-by-default — required in every policy file')],
+      [span('kw','default'), txt(' '), span('fn','allow'), txt(' '), span('op',':='), txt(' '), span('kw','false')],
+      [],
+      [span('cmt','# HITL escalation for high-value refunds')],
+      [span('fn','requires_hitl'), txt(' '), span('kw','if'), txt(' {')],
+      [txt('    input.action '), span('op','=='), txt(' '), span('str','"approve_refund"')],
+      [txt('    input.args.amount '), span('op','>'), txt(' '), span('num','1000')],
+      [txt('}')],
+      [],
+      [span('cmt','# Allow low-value refunds with correct scope + role')],
+      [span('fn','allow'), txt(' '), span('kw','if'), txt(' {')],
+      [txt('    input.action '), span('op','=='), txt(' '), span('str','"approve_refund"')],
+      [txt('    input.context.user_role '), span('kw','in'), txt(' {')],
+      [txt('        '), span('str','"support_agent"'), txt(', '), span('str','"manager"'), txt(', '), span('str','"worker_agent"')],
+      [txt('    }')],
+      [txt('    '), span('str','"approve_refund_under_100"'), txt(' '), span('kw','in')],
+      [txt('        input.context.session_scopes')],
+      [txt('    input.args.amount '), span('op','>='), txt(' '), span('num','0')],
+      [txt('    input.args.amount '), span('op','<='), txt(' '), span('num','100')],
+      [txt('}')],
+      [],
+      [span('cmt','# Hard block: no refunds to flagged accounts')],
+      [span('fn','deny'), txt(' '), span('kw','if'), txt(' {')],
+      [txt('    input.action '), span('op','=='), txt(' '), span('str','"approve_refund"')],
+      [txt('    input.args.customer_id '), span('kw','in'), txt(' data.blocklist.customers')],
+      [txt('}')],
+    ];
+
+    lines.forEach((lineNodes, i) => {
+      lineNodes.forEach(node => pre.appendChild(node));
+      if (i < lines.length - 1) pre.appendChild(nl());
+    });
+  })();
+
+  // ── Terminal animation (entirely DOM-based, no innerHTML) ───────────────────
+  (function buildTerminal() {
+    const body = document.getElementById('terminal-body');
+    if (!body) return;
+
+    const scenarios = [
+      {
+        cmd: 'gate eval approve_refund --amount=75.00 --customer=cust_001',
+        steps: [
+          { delay: 620,  parts: [{ cls: 't-info', text: 'evaluating · financial.rego · security.rego · delegation.rego' }] },
+          { delay: 980,  parts: [{ cls: 't-allow', text: '✓ ALLOW' }, { cls: 't-info', text: '  · 7ms · approve_refund_under_100 · support_agent' }] },
+        ]
+      },
+      {
+        cmd: 'gate eval bulk_delete_records --table=orders --count=50000',
+        steps: [
+          { delay: 520,  parts: [{ cls: 't-info', text: 'evaluating · financial.rego · security.rego · delegation.rego' }] },
+          { delay: 840,  parts: [{ cls: 't-block', text: '✕ BLOCK' }, { cls: 't-info', text: '  · 5ms · security.rego → destructive_bulk_operation' }] },
+        ]
+      },
+      {
+        cmd: 'gate eval approve_refund --amount=4500.00 --customer=cust_098',
+        steps: [
+          { delay: 540,  parts: [{ cls: 't-info', text: 'evaluating · financial.rego · security.rego · delegation.rego' }] },
+          { delay: 900,  parts: [{ cls: 't-hitl',  text: '⏸ HITL ' }, { cls: 't-info', text: '  · 7ms · amount > $1000 → escalated for human review' }] },
+          { delay: 3800, parts: [{ cls: 't-info', text: '  → approved · ops-lead@acme.com · 14s' }], indent: true },
+          { delay: 4200, parts: [{ cls: 't-allow', text: '✓ ALLOW' }, { cls: 't-info', text: '  · human-approved' }] },
+        ]
+      },
+      {
+        cmd: 'gate eval read_file --path=/etc/secrets/.env',
+        steps: [
+          { delay: 500,  parts: [{ cls: 't-info', text: 'evaluating · financial.rego · security.rego · delegation.rego' }] },
+          { delay: 760,  parts: [{ cls: 't-block', text: '✕ BLOCK' }, { cls: 't-info', text: '  · 5ms · security.rego → hard_deny_credentials_access' }] },
+        ]
+      },
+    ];
+
+    let lineBuffer = [];
+
+    function makeSpan(cls, text) {
+      const s = document.createElement('span');
+      s.className = cls;
+      s.textContent = text;
+      return s;
+    }
+
+    function addRow(parts, isPromptRow, cmd, showCursor) {
+      const row = document.createElement('div');
+      row.className = 't-line';
+
+      if (isPromptRow) {
+        const p = document.createElement('span');
+        p.className = 't-prompt';
+        p.textContent = '$';
+        row.appendChild(p);
+        row.appendChild(document.createTextNode(' '));
+        const c = document.createElement('span');
+        c.className = 't-cmd';
+        if (cmd) c.textContent = cmd;
+        if (showCursor) {
+          const cur = document.createElement('span');
+          cur.className = 't-cursor';
+          c.appendChild(cur);
+        }
+        row.appendChild(c);
+      } else {
+        const wrapper = document.createElement('span');
+        wrapper.className = 't-indent';
+        parts.forEach(p => wrapper.appendChild(makeSpan(p.cls, p.text)));
+        row.appendChild(wrapper);
+      }
+
+      body.appendChild(row);
+      lineBuffer.push(row);
+      if (lineBuffer.length > 18) { lineBuffer.shift().remove(); }
+      body.scrollTop = body.scrollHeight;
+      return row;
+    }
+
+    function addBlank() {
+      const row = document.createElement('div');
+      row.className = 't-line';
+      body.appendChild(row);
+      lineBuffer.push(row);
+      if (lineBuffer.length > 18) lineBuffer.shift().remove();
+    }
+
+    let currentIdx = 0;
+    let timers = [];
+
+    function runScenario(idx) {
+      const sc = scenarios[idx];
+      addBlank();
+
+      // Typing row with cursor
+      const promptRow = addRow([], true, '', true);
+      const cmdSpan = promptRow.querySelector('.t-cmd');
+      const cursor  = promptRow.querySelector('.t-cursor');
+
+      let i = 0;
+      const typeInterval = setInterval(() => {
+        if (i < sc.cmd.length) {
+          const c = document.createTextNode(sc.cmd[i]);
+          cmdSpan.insertBefore(c, cursor);
+          i++;
+          body.scrollTop = body.scrollHeight;
+        } else {
+          clearInterval(typeInterval);
+          cursor.remove();
+          sc.steps.forEach(step => {
+            const t = setTimeout(() => addRow(step.parts, false, null, false), step.delay);
+            timers.push(t);
+          });
+          const totalDelay = (sc.steps.at(-1)?.delay || 1000) + 1900;
+          const next = setTimeout(() => {
+            currentIdx = (idx + 1) % scenarios.length;
+            runScenario(currentIdx);
+          }, totalDelay);
+          timers.push(next);
+        }
+      }, 27);
+    }
+
+    const startT = setTimeout(() => runScenario(0), 1200);
+    timers.push(startT);
+  })();
+</script>
+</body>
+</html>

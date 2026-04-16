@@ -1,0 +1,45 @@
+version: 1
+package: kitelogik.custom_rules
+
+rules:
+  - name: block_high_refunds
+    when:
+      action: approve_refund
+      args:
+        amount:
+          gt: 1000
+    then: deny
+    reason: "Refunds over $1000 require escalation"
+
+  - name: allow_read_ops
+    when:
+      action:
+        - read_customer
+        - list_transactions
+      scope: read_customer
+    then: allow
+    risk_tier: INFORMATIONAL
+
+  - name: block_file_writes_outside_tmp
+    when:
+      action: write_file
+      args:
+        path:
+          not_in:
+            - /tmp
+    then: deny
+    reason: "File writes restricted to /tmp"
+
+  - name: allow_support_low_refunds
+    when:
+      action: approve_refund
+      role:
+        - support_agent
+        - manager
+      scope: approve_refund_under_100
+      args:
+        amount:
+          gte: 0
+          lte: 100
+    then: allow
+    risk_tier: TRANSACTIONAL_LOW

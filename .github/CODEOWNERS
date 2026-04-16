@@ -1,0 +1,11 @@
+# Default owner for everything
+* @kitelogik/maintainers
+
+# Security-critical paths require explicit review
+/tether/          @kitelogik/maintainers
+/anchor/          @kitelogik/maintainers
+/gateway/         @kitelogik/maintainers
+/policies/        @kitelogik/maintainers
+/sandbox/         @kitelogik/maintainers
+/kitelogik/       @kitelogik/maintainers
+SECURITY.md       @kitelogik/maintainers

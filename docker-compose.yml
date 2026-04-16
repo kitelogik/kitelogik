@@ -1,0 +1,21 @@
+# ── Development-only compose file ────────────────────────────────────────────
+# OPA policy engine. Start with: docker compose up -d opa
+
+services:
+  opa:
+    image: openpolicyagent/opa:latest
+    command: run --server --addr :8181 --watch /policies
+    ports:
+      - "8181:8181"
+    volumes:
+      - ./kitelogik/policies:/policies:ro
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:8181/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
