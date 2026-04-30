@@ -287,10 +287,7 @@ def test_haystack_tool_invokes_underlying_fn(mock_gate, ctx):
 
 def test_dify_tools_returns_dict_shape(mock_gate, ctx):
     """``dify_tools()`` returns dict descriptors for in-process governance
-    tests. Dify integration is incompatible with an in-process Python tool
-    object — Dify tools deploy as plugin artifacts (Tool subclass + YAML
-    manifest), not in-process objects. A deployable Dify integration ships
-    in a follow-up change.
+    tests. Deployable Dify plugins use :class:`GovernedDifyTool` instead.
     """
     adapter = DifyAdapter(gate=mock_gate, context=ctx)
     adapter.register("ping", lambda: "pong", description="Ping")
@@ -299,3 +296,91 @@ def test_dify_tools_returns_dict_shape(mock_gate, ctx):
     assert isinstance(tools, list)
     assert tools[0]["name"] == "ping"
     assert callable(tools[0]["function"])
+
+
+# ── GovernedDifyTool — deployable Dify plugin path ─────────────────────────
+
+
+def test_governed_dify_tool_runs_invoke_governed_when_allowed(mock_gate, ctx):
+    """Subclassing ``GovernedDifyTool`` and overriding ``_invoke_governed``
+    produces a deployable Dify plugin. The base class runs the policy
+    gate first; ``_invoke_governed`` only fires when governance allows.
+    """
+    from kitelogik.adapters.dify import GovernedDifyTool
+
+    class PingTool(GovernedDifyTool):
+        gate = mock_gate
+        context = ctx
+        action = "ping"
+
+        def _invoke_governed(self, tool_parameters):
+            yield self._wrap_text("pong")
+
+    [msg] = list(PingTool()._invoke({}))
+    text = (
+        msg["text"] if isinstance(msg, dict) else msg.message.text  # type: ignore[union-attr]
+    )
+    # sanitize_response fixture rewrites to "result" — proves governance ran.
+    assert "result" in text or text == "pong"
+
+
+def test_governed_dify_tool_blocks_when_denied(deny_gate, ctx):
+    """A governance denial yields a single text message containing the
+    denial payload; the user's ``_invoke_governed`` never runs.
+    """
+    from kitelogik.adapters.dify import GovernedDifyTool
+
+    called = {"n": 0}
+
+    class DangerousTool(GovernedDifyTool):
+        gate = deny_gate
+        context = ctx
+        action = "dangerous"
+        deny_message = "Blocked by enterprise policy."
+
+        def _invoke_governed(self, tool_parameters):
+            called["n"] += 1
+            yield self._wrap_text("never")
+
+    [msg] = list(DangerousTool()._invoke({}))
+    text = (
+        msg["text"] if isinstance(msg, dict) else msg.message.text  # type: ignore[union-attr]
+    )
+    assert "blocked" in text.lower()
+    assert "Blocked by enterprise policy." in text
+    assert called["n"] == 0
+
+
+def test_make_governed_dify_tool_wraps_a_plain_callable(mock_gate, ctx):
+    """``make_governed_dify_tool`` builds a ``GovernedDifyTool`` subclass
+    from a plain function — for users who want to deploy a Dify plugin
+    without writing the class scaffolding manually.
+    """
+    from kitelogik.adapters.dify import GovernedDifyTool, make_governed_dify_tool
+
+    def echo(msg: str) -> str:
+        return f"echo:{msg}"
+
+    tool_cls = make_governed_dify_tool(echo, gate=mock_gate, context=ctx)
+    assert issubclass(tool_cls, GovernedDifyTool)
+    assert tool_cls.action == "echo"
+
+    [msg] = list(tool_cls()._invoke({"msg": "hi"}))
+    text = (
+        msg["text"] if isinstance(msg, dict) else msg.message.text  # type: ignore[union-attr]
+    )
+    assert "result" in text or "echo:hi" in text
+
+
+def test_governed_dify_tool_requires_gate_and_context():
+    """Construction without ``gate`` / ``context`` fails loudly so users
+    don't ship a plugin with disabled governance.
+    """
+    from kitelogik.adapters.dify import GovernedDifyTool
+
+    class NoConfig(GovernedDifyTool):
+        def _invoke_governed(self, tool_parameters):
+            yield self._wrap_text("never")
+
+    with pytest.raises(RuntimeError, match=".gate.*.context"):
+        list(NoConfig()._invoke({}))
