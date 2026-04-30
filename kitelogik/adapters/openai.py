@@ -54,7 +54,12 @@ import logging
 from collections.abc import Callable
 from typing import Any
 
-from kitelogik.governed import GovernanceError, _check_decision, _maybe_sanitize
+from kitelogik.governed import (
+    GovernanceError,
+    _check_decision,
+    _maybe_sanitize,
+    _run_coroutine_sync,
+)
 from kitelogik.tether.gate import PolicyGate
 from kitelogik.tether.models import SessionContext, ToolCallInput
 
@@ -199,8 +204,17 @@ class OpenAIAdapter:
         return await asyncio.gather(*[self.execute(tc) for tc in tool_calls])
 
     def execute_sync(self, tool_call: Any) -> dict:
-        """Synchronous variant of execute(). Runs the event loop internally."""
-        return asyncio.get_event_loop().run_until_complete(self.execute(tool_call))
+        """Synchronous variant of :meth:`execute`.
+
+        Safe to call from any context: ``asyncio.run`` is used when no
+        event loop is running, and a background thread takes over when
+        the caller is already inside a loop (Jupyter, FastAPI). The
+        project's ``pyproject.toml`` treats ``DeprecationWarning`` as a
+        hard error, so the legacy ``asyncio.get_event_loop()`` path
+        cannot be used here.
+        """
+        result: dict = _run_coroutine_sync(self.execute(tool_call))
+        return result
 
 
 def _tool_result(tool_call_id: str, content: str) -> dict:

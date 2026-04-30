@@ -270,9 +270,30 @@ def _wrap_existing_tool(
         result: str = _run_coroutine_sync(_governed_async(**kwargs))
         return result
 
+    # Preserve the original tool's args_schema so per-arg Pydantic
+    # validation still applies. Without this, StructuredTool falls back
+    # to inferring from the wrapper's ``**kwargs`` signature, which has
+    # no fields and rejects every call. Fall back to inferring from the
+    # tool's ``_run`` / ``_arun`` signature when no schema is exposed.
+    args_schema = _extract_args_schema(tool)
+
     return StructuredTool.from_function(
         func=_governed_sync,
         coroutine=_governed_async,
         name=original_name,
         description=original_desc,
+        args_schema=args_schema,
     )
+
+
+def _extract_args_schema(tool: Any) -> Any:
+    """Pull an ``args_schema`` off a BaseTool, or infer one from ``_run``."""
+    schema = getattr(tool, "args_schema", None)
+    if schema is not None:
+        return schema
+    for method_name in ("_run", "_arun"):
+        method = getattr(tool, method_name, None)
+        if method is None:
+            continue
+        return _build_args_schema_from_fn(method, getattr(tool, "name", "tool"))
+    return None

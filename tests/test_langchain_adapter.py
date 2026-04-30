@@ -104,11 +104,10 @@ async def test_as_governed_tool_denies_call_returns_blocked_message(gate, ctx, m
 
 
 async def test_as_governed_tool_multi_arg_via_public_ainvoke(gate, ctx, mock_opa, allow_dec):
-    """Regression test: multi-arg tools invoked via the public ``ainvoke``
-    API (the path LangGraph's tool node uses) must accept per-arg payloads
-    and route them to ``fn``. Before the args_schema inference fix, this
-    failed with Pydantic validation errors because the wrapper's
-    ``**kwargs`` signature gave StructuredTool no schema to validate against.
+    """Multi-arg tools invoked via the public ``ainvoke`` API (the path
+    LangGraph's tool node uses) must accept per-arg payloads and route
+    them to ``fn``. The wrapper infers a Pydantic schema from ``fn``'s
+    signature so ``StructuredTool`` validates per-argument types.
     """
     mock_opa.evaluate.return_value = allow_dec
 
@@ -199,6 +198,61 @@ async def test_govern_toolkit_deny_returns_blocked_message(gate, ctx, mock_opa, 
     governed_tools = govern_toolkit([tool], gate=gate, context=ctx)
     result = await governed_tools[0].coroutine()
     assert "[BLOCKED]" in result
+
+
+async def test_govern_toolkit_preserves_args_schema(gate, ctx, mock_opa, allow_dec):
+    """``govern_toolkit`` preserves the wrapped tool's ``args_schema`` so
+    that callers like LangGraph's ``ToolNode`` can still validate
+    per-argument types from the model's tool call. Falls back to inferring
+    the schema from ``_run`` when no explicit schema is set.
+    """
+    mock_opa.evaluate.return_value = allow_dec
+
+    from langchain_core.tools import StructuredTool
+    from pydantic import BaseModel, Field
+
+    class SearchArgs(BaseModel):
+        query: str = Field(description="The search query")
+        limit: int = 10
+
+    original = StructuredTool.from_function(
+        func=lambda query, limit=10: f"hits:{limit}:{query}",
+        name="search",
+        description="Search the index",
+        args_schema=SearchArgs,
+    )
+
+    governed = govern_toolkit([original], gate=gate, context=ctx)
+
+    # Schema is preserved on the wrapper (callers like LangGraph's ToolNode
+    # introspect this to validate per-call args).
+    assert governed[0].args_schema is SearchArgs
+
+    # End-to-end: a real ainvoke call with the schema's field names succeeds.
+    result = await governed[0].ainvoke({"query": "kitelogik", "limit": 3})
+    assert result == "hits:3:kitelogik"
+
+
+async def test_govern_toolkit_falls_back_to_run_signature(gate, ctx, mock_opa, allow_dec):
+    """When a BaseTool exposes no ``args_schema``, the wrapper infers one from
+    the underlying ``_run`` signature so concrete fields still flow through.
+    """
+    mock_opa.evaluate.return_value = allow_dec
+
+    from langchain_core.tools import BaseTool
+
+    class CustomTool(BaseTool):
+        name: str = "compute"
+        description: str = "Compute a value"
+
+        def _run(self, x: int, y: int = 1) -> str:  # type: ignore[override]
+            return f"{x + y}"
+
+    governed = govern_toolkit([CustomTool()], gate=gate, context=ctx)
+    # A real call lands on _run via ainvoke; if no schema were inferred this
+    # would fail with a Pydantic validation error.
+    result = await governed[0].ainvoke({"x": 5, "y": 7})
+    assert result == "12"
 
 
 # ── Import guard ──────────────────────────────────────────────────────────────

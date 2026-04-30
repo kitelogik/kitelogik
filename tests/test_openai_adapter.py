@@ -245,3 +245,43 @@ async def test_execute_async_tool_function(gate, ctx, mock_opa, allow_dec):
     result = await adapter.execute(tc)
 
     assert "async_result:x99" in result["content"]
+
+
+# ── execute_sync() ────────────────────────────────────────────────────────────
+
+
+def test_execute_sync_outside_event_loop(gate, ctx, mock_opa, allow_dec):
+    """``execute_sync`` runs cleanly when no event loop is active — the
+    most common pytest / script case. Routes through ``_run_coroutine_sync``
+    rather than the deprecated ``asyncio.get_event_loop()`` path.
+    """
+    mock_opa.evaluate.return_value = allow_dec
+
+    adapter = OpenAIAdapter(gate=gate, context=ctx)
+    adapter.register("ping", lambda: "pong")
+
+    tc = _make_tool_call("call_sync_1", "ping", {})
+    result = adapter.execute_sync(tc)
+
+    assert result["role"] == "tool"
+    assert result["tool_call_id"] == "call_sync_1"
+    assert "pong" in result["content"]
+
+
+async def test_execute_sync_inside_event_loop(gate, ctx, mock_opa, allow_dec):
+    """When called from inside an existing event loop (Jupyter, FastAPI),
+    execute_sync must hand off to a thread pool instead of crashing on
+    ``loop already running``.
+    """
+    mock_opa.evaluate.return_value = allow_dec
+
+    adapter = OpenAIAdapter(gate=gate, context=ctx)
+    adapter.register("ping", lambda: "pong")
+
+    tc = _make_tool_call("call_sync_2", "ping", {})
+    # We are inside an asyncio event loop (asyncio_mode = auto). Calling
+    # execute_sync from here exercises the thread-pool fallback in
+    # _run_coroutine_sync.
+    result = adapter.execute_sync(tc)
+
+    assert "pong" in result["content"]
