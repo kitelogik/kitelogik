@@ -1,8 +1,8 @@
 # Kite Logik
 
 [![CI](https://github.com/kitelogik/kitelogik/actions/workflows/ci.yml/badge.svg)](https://github.com/kitelogik/kitelogik/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-605%20passing-brightgreen)](https://github.com/kitelogik/kitelogik/actions)
-[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
+[![Tests](https://img.shields.io/badge/tests-625%20passing-brightgreen)](https://github.com/kitelogik/kitelogik/actions)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](https://github.com/kitelogik/kitelogik/blob/main/LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue)](https://www.python.org)
 [![PyPI](https://img.shields.io/pypi/v/kitelogik.svg)](https://pypi.org/project/kitelogik/)
 
@@ -165,7 +165,7 @@ agent = create_react_agent(llm, tools=tools)
 
 **11 framework adapters** — OpenAI, LangChain, CrewAI, OpenAI Agents SDK, LangGraph, Google ADK, PydanticAI, LlamaIndex, Semantic Kernel, Haystack, Dify. All share the same governance pipeline — see the docstrings in `kitelogik/adapters/` for per-framework usage examples.
 
-**Browse runnable examples** — every snippet above has a standalone script in [`examples/`](examples/) (decorator, GovernedToolbox, OpenAI, LangChain, HITL escalation). Start with [`examples/01_decorator.py`](examples/01_decorator.py).
+**Browse runnable examples** — every snippet above has a standalone script in [`examples/`](https://github.com/kitelogik/kitelogik/tree/main/examples) (decorator, GovernedToolbox, OpenAI, LangChain, HITL escalation). Start with [`examples/01_decorator.py`](https://github.com/kitelogik/kitelogik/blob/main/examples/01_decorator.py).
 
 ## Writing Policies
 
@@ -295,7 +295,7 @@ kitelogik/
   observability/    OpenTelemetry tracing
   mcp/              MCP client with supply chain verification
   policies/         OPA/Rego rules, YAML compiler, starter library, examples
-tests/              605 tests across unit, integration, adversarial, fuzz, benchmark suites
+tests/              640 tests across unit, integration, adversarial, fuzz, benchmark suites
 ```
 
 ## OSS vs Enterprise
@@ -356,7 +356,7 @@ For enterprise licensing: [licensing@kitelogik.com](mailto:licensing@kitelogik.c
 python -m venv .venv && .venv/bin/pip install -e ".[dev]"
 docker compose up -d opa    # start OPA policy engine
 
-make test           # 605 tests (520 unit + 85 adversarial)
+make test           # 625 tests passing (544 unit + 85 adversarial; integration suite runs separately)
 make lint           # ruff check + format
 
 # Policy management
@@ -378,10 +378,10 @@ python benchmarks/bench_memory_session.py   # memory + credential broker (no OPA
 
 ## Further Reading
 
-- [Examples](examples/) — runnable scripts for each integration pattern
-- [Contributing](CONTRIBUTING.md)
-- [Security Policy](SECURITY.md)
-- [Changelog](CHANGELOG.md)
+- [Examples](https://github.com/kitelogik/kitelogik/tree/main/examples) — runnable scripts for each integration pattern
+- [Contributing](https://github.com/kitelogik/kitelogik/blob/main/CONTRIBUTING.md)
+- [Security Policy](https://github.com/kitelogik/kitelogik/blob/main/SECURITY.md)
+- [Changelog](https://github.com/kitelogik/kitelogik/blob/main/CHANGELOG.md)
 
 ---
 
