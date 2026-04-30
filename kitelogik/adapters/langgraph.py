@@ -24,14 +24,13 @@ LangGraph is NOT a hard dependency.
 
 from __future__ import annotations
 
-import inspect
 import logging
 from collections.abc import Callable
 from typing import Any
 
-from kitelogik.governed import GovernanceError, _check_decision, _maybe_sanitize
+from kitelogik.adapters._base import _run_governed_call
 from kitelogik.tether.gate import PolicyGate
-from kitelogik.tether.models import SessionContext, ToolCallInput
+from kitelogik.tether.models import SessionContext
 
 logger = logging.getLogger(__name__)
 
@@ -76,20 +75,17 @@ def as_governed_node(
 
     async def _governed_node(state: dict[str, Any]) -> dict[str, Any]:
         args = state.get("args", {})
-        tc = ToolCallInput(action=action_name, tool_name=name, args=args)
-
-        try:
-            decision = await gate.evaluate_tool_call(tc, context)
-            _check_decision(name, decision)
-        except GovernanceError as e:
-            return {**state, "result": f"[BLOCKED] {e}", "blocked": True}
-
-        if inspect.iscoroutinefunction(fn):
-            result = await fn(**args)
-        else:
-            result = fn(**args)
-
-        result = _maybe_sanitize(gate, result, sanitize)
+        allowed, result, err = await _run_governed_call(
+            gate=gate,
+            context=context,
+            action=action_name,
+            tool_name=name,
+            args=args,
+            fn=fn,
+            sanitize=sanitize,
+        )
+        if not allowed:
+            return {**state, "result": f"[BLOCKED] {err}", "blocked": True}
         return {**state, "result": result, "blocked": False}
 
     _governed_node.__name__ = f"governed_{name}"

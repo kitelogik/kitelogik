@@ -48,20 +48,15 @@ message history, or prompt. Only tool execution is intercepted.
 """
 
 import asyncio
-import inspect
 import json
 import logging
 from collections.abc import Callable
 from typing import Any
 
-from kitelogik.governed import (
-    GovernanceError,
-    _check_decision,
-    _maybe_sanitize,
-    _run_coroutine_sync,
-)
+from kitelogik.adapters._base import _run_governed_call
+from kitelogik.governed import _run_coroutine_sync
 from kitelogik.tether.gate import PolicyGate
-from kitelogik.tether.models import SessionContext, ToolCallInput
+from kitelogik.tether.models import SessionContext
 
 logger = logging.getLogger(__name__)
 
@@ -169,28 +164,27 @@ class OpenAIAdapter:
             )
 
         fn, action_name, _ = self._tools[name]
-        tc = ToolCallInput(action=action_name, tool_name=name, args=args)
 
         try:
-            decision = await self._gate.evaluate_tool_call(tc, self._context)
-            _check_decision(name, decision)
-        except GovernanceError as e:
-            logger.info("Tool call blocked by governance: tool=%s reason=%s", name, e)
+            allowed, result, _err = await _run_governed_call(
+                gate=self._gate,
+                context=self._context,
+                action=action_name,
+                tool_name=name,
+                args=args,
+                fn=fn,
+                sanitize=self._sanitize,
+            )
+        except Exception as e:
+            logger.exception("Tool execution error: tool=%s", name)
+            return _tool_result(tool_call_id, json.dumps({"error": str(e)}))
+
+        if not allowed:
             return _tool_result(
                 tool_call_id,
                 json.dumps({"blocked": True, "reason": self._deny_message}),
             )
 
-        try:
-            if inspect.iscoroutinefunction(fn):
-                result = await fn(**args)
-            else:
-                result = fn(**args)
-        except Exception as e:
-            logger.exception("Tool execution error: tool=%s", name)
-            return _tool_result(tool_call_id, json.dumps({"error": str(e)}))
-
-        result = _maybe_sanitize(self._gate, result, self._sanitize)
         content = result if isinstance(result, str) else json.dumps(result)
         return _tool_result(tool_call_id, content)
 

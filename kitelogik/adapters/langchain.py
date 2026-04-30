@@ -43,14 +43,10 @@ import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
-from kitelogik.governed import (
-    GovernanceError,
-    _check_decision,
-    _maybe_sanitize,
-    _run_coroutine_sync,
-)
+from kitelogik.adapters._base import _run_governed_call
+from kitelogik.governed import _run_coroutine_sync
 from kitelogik.tether.gate import PolicyGate
-from kitelogik.tether.models import SessionContext, ToolCallInput
+from kitelogik.tether.models import SessionContext
 
 if TYPE_CHECKING:
     try:
@@ -105,19 +101,17 @@ def as_governed_tool(
     _context = context
 
     async def _governed_async(**kwargs: Any) -> str:
-        tc = ToolCallInput(action=action_name, tool_name=name, args=kwargs)
-        try:
-            decision = await _gate.evaluate_tool_call(tc, _context)
-            _check_decision(name, decision)
-        except GovernanceError as e:
-            return f"[BLOCKED] {e}"
-
-        if inspect.iscoroutinefunction(fn):
-            result = await fn(**kwargs)
-        else:
-            result = fn(**kwargs)
-
-        result = _maybe_sanitize(_gate, result, sanitize)
+        allowed, result, err = await _run_governed_call(
+            gate=_gate,
+            context=_context,
+            action=action_name,
+            tool_name=name,
+            args=kwargs,
+            fn=fn,
+            sanitize=sanitize,
+        )
+        if not allowed:
+            return f"[BLOCKED] {err}"
         return result if isinstance(result, str) else str(result)
 
     def _governed_sync(**kwargs: Any) -> str:
@@ -242,28 +236,32 @@ def _wrap_existing_tool(
     _gate = gate
     _context = context
 
-    async def _governed_async(**kwargs: Any) -> str:
-        tc = ToolCallInput(action=action_name, tool_name=original_name, args=kwargs)
-        try:
-            decision = await _gate.evaluate_tool_call(tc, _context)
-            _check_decision(original_name, decision)
-        except GovernanceError as e:
-            return f"[BLOCKED] {e}"
-
+    async def _invoke_underlying(**kwargs: Any) -> Any:
         # Public API ainvoke/invoke handles RunnableConfig threading and is
         # forward-compatible with langchain-core ≥0.3 which requires `config`
         # in `_arun`. Falls back to the private accessors only when the public
         # API is unavailable (older langchain-core).
         if hasattr(tool, "ainvoke"):
-            result = await tool.ainvoke(kwargs)
+            return await tool.ainvoke(kwargs)
         elif hasattr(tool, "_arun"):
-            result = await tool._arun(**kwargs)
+            return await tool._arun(**kwargs)
         elif hasattr(tool, "invoke"):
-            result = tool.invoke(kwargs)
+            return tool.invoke(kwargs)
         else:
-            result = tool._run(**kwargs)
+            return tool._run(**kwargs)
 
-        result = _maybe_sanitize(_gate, result, sanitize)
+    async def _governed_async(**kwargs: Any) -> str:
+        allowed, result, err = await _run_governed_call(
+            gate=_gate,
+            context=_context,
+            action=action_name,
+            tool_name=original_name,
+            args=kwargs,
+            fn=_invoke_underlying,
+            sanitize=sanitize,
+        )
+        if not allowed:
+            return f"[BLOCKED] {err}"
         return result if isinstance(result, str) else str(result)
 
     def _governed_sync(**kwargs: Any) -> str:

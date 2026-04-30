@@ -27,17 +27,13 @@ Usage
     agent = Agent(name="support", model="gemini-2.0-flash", tools=adapter.adk_tools())
 """
 
-import asyncio
 import functools
-import inspect
 import json
 import logging
 from collections.abc import Callable
 from typing import Any
 
-from kitelogik.adapters._base import BaseGovernedAdapter
-from kitelogik.governed import GovernanceError, _check_decision, _maybe_sanitize
-from kitelogik.tether.models import ToolCallInput
+from kitelogik.adapters._base import BaseGovernedAdapter, _run_governed_call
 
 logger = logging.getLogger(__name__)
 
@@ -95,20 +91,17 @@ class GoogleADKAdapter(BaseGovernedAdapter):
 
         @functools.wraps(fn)
         async def governed(**kwargs: Any) -> str:
-            tc = ToolCallInput(action=action_name, tool_name=name, args=kwargs)
-            try:
-                decision = await gate.evaluate_tool_call(tc, context)
-                _check_decision(name, decision)
-            except GovernanceError as e:
-                logger.info("Tool call blocked by governance: tool=%s reason=%s", name, e)
+            allowed, result, _err = await _run_governed_call(
+                gate=gate,
+                context=context,
+                action=action_name,
+                tool_name=name,
+                args=kwargs,
+                fn=fn,
+                sanitize=sanitize,
+            )
+            if not allowed:
                 return json.dumps({"blocked": True, "reason": deny_message})
-
-            if inspect.iscoroutinefunction(fn):
-                result = await fn(**kwargs)
-            else:
-                result = await asyncio.to_thread(fn, **kwargs)
-
-            result = _maybe_sanitize(gate, result, sanitize)
             return result if isinstance(result, str) else json.dumps(result)
 
         # ``functools.wraps`` already copies __name__, __doc__,

@@ -21,16 +21,14 @@ Requirements
 The openai-agents package is NOT a hard dependency.
 """
 
-import asyncio
-import inspect
 import json
 import logging
 from collections.abc import Callable
 from typing import Any
 
-from kitelogik.governed import GovernanceError, _check_decision, _maybe_sanitize
+from kitelogik.adapters._base import _run_governed_call
 from kitelogik.tether.gate import PolicyGate
-from kitelogik.tether.models import SessionContext, ToolCallInput
+from kitelogik.tether.models import SessionContext
 
 logger = logging.getLogger(__name__)
 
@@ -130,21 +128,17 @@ class OpenAIAgentsAdapter:
             if not isinstance(kwargs, dict):
                 return json.dumps({"error": "Tool arguments must be a JSON object"})
 
-            tc = ToolCallInput(action=action_name, tool_name=name, args=kwargs)
-            try:
-                decision = await gate.evaluate_tool_call(tc, context)
-                _check_decision(name, decision)
-            except GovernanceError as e:
-                return json.dumps({"blocked": True, "reason": str(e)})
-
-            if inspect.iscoroutinefunction(fn):
-                result = await fn(**kwargs)
-            else:
-                # Run sync callables on a thread so a blocking I/O tool
-                # doesn't stall the agent's event loop.
-                result = await asyncio.to_thread(fn, **kwargs)
-
-            result = _maybe_sanitize(gate, result, sanitize)
+            allowed, result, err = await _run_governed_call(
+                gate=gate,
+                context=context,
+                action=action_name,
+                tool_name=name,
+                args=kwargs,
+                fn=fn,
+                sanitize=sanitize,
+            )
+            if not allowed:
+                return json.dumps({"blocked": True, "reason": str(err)})
             return result if isinstance(result, str) else json.dumps(result)
 
         return _governed_fn

@@ -40,18 +40,15 @@ Haystack ``Tool`` requires a JSON Schema describing each parameter via the
 generator cannot serialise the tool to the model's tool-spec.
 """
 
-import asyncio
 import functools
-import inspect
 import json
 import logging
 from collections.abc import Callable
 from typing import Any
 
-from kitelogik.adapters._base import BaseGovernedAdapter
-from kitelogik.governed import GovernanceError, _check_decision, _maybe_sanitize
+from kitelogik.adapters._base import BaseGovernedAdapter, _run_governed_call
 from kitelogik.tether.gate import PolicyGate
-from kitelogik.tether.models import SessionContext, ToolCallInput
+from kitelogik.tether.models import SessionContext
 
 logger = logging.getLogger(__name__)
 
@@ -146,24 +143,20 @@ class HaystackAdapter(BaseGovernedAdapter):
 
         @functools.wraps(fn)
         def governed(**kwargs: Any) -> str:
-            async def _run() -> str:
-                tc = ToolCallInput(action=action_name, tool_name=name, args=kwargs)
-                try:
-                    decision = await gate.evaluate_tool_call(tc, context)
-                    _check_decision(name, decision)
-                except GovernanceError as e:
-                    logger.info("Tool call blocked by governance: tool=%s reason=%s", name, e)
-                    return json.dumps({"blocked": True, "reason": deny_message})
-
-                if inspect.iscoroutinefunction(fn):
-                    result = await fn(**kwargs)
-                else:
-                    result = await asyncio.to_thread(fn, **kwargs)
-
-                result = _maybe_sanitize(gate, result, sanitize)
-                return result if isinstance(result, str) else json.dumps(result)
-
-            return _run_coroutine_sync(_run())  # type: ignore[no-any-return]
+            allowed, result, _err = _run_coroutine_sync(
+                _run_governed_call(
+                    gate=gate,
+                    context=context,
+                    action=action_name,
+                    tool_name=name,
+                    args=kwargs,
+                    fn=fn,
+                    sanitize=sanitize,
+                )
+            )
+            if not allowed:
+                return json.dumps({"blocked": True, "reason": deny_message})
+            return result if isinstance(result, str) else json.dumps(result)
 
         governed.__name__ = name
         return governed

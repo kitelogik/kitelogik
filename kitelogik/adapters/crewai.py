@@ -18,19 +18,14 @@ Requirements
 CrewAI is NOT a hard dependency. It is only imported at call time.
 """
 
-import inspect
 import logging
 from collections.abc import Callable
 from typing import Any
 
-from kitelogik.governed import (
-    GovernanceError,
-    _check_decision,
-    _maybe_sanitize,
-    _run_coroutine_sync,
-)
+from kitelogik.adapters._base import _run_governed_call
+from kitelogik.governed import _run_coroutine_sync
 from kitelogik.tether.gate import PolicyGate
-from kitelogik.tether.models import SessionContext, ToolCallInput
+from kitelogik.tether.models import SessionContext
 
 logger = logging.getLogger(__name__)
 
@@ -108,19 +103,19 @@ class CrewAIAdapter:
         @crewai_tool_decorator(name)
         def governed_tool(**kwargs: Any) -> str:
             """Governed tool wrapper."""
-            tc = ToolCallInput(action=action_name, tool_name=name, args=kwargs)
-            try:
-                decision = _run_coroutine_sync(gate.evaluate_tool_call(tc, context))
-                _check_decision(name, decision)
-            except GovernanceError as e:
-                return f"[BLOCKED] {e}"
-
-            if inspect.iscoroutinefunction(fn):
-                result = _run_coroutine_sync(fn(**kwargs))
-            else:
-                result = fn(**kwargs)
-
-            result = _maybe_sanitize(gate, result, sanitize)
+            allowed, result, err = _run_coroutine_sync(
+                _run_governed_call(
+                    gate=gate,
+                    context=context,
+                    action=action_name,
+                    tool_name=name,
+                    args=kwargs,
+                    fn=fn,
+                    sanitize=sanitize,
+                )
+            )
+            if not allowed:
+                return f"[BLOCKED] {err}"
             return result if isinstance(result, str) else str(result)
 
         governed_tool.__doc__ = description or f"Governed tool: {name}"

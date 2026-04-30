@@ -20,6 +20,49 @@ from kitelogik.tether.models import SessionContext, ToolCallInput
 logger = logging.getLogger(__name__)
 
 
+async def _run_governed_call(
+    *,
+    gate: PolicyGate,
+    context: SessionContext,
+    action: str,
+    tool_name: str,
+    args: dict[str, Any],
+    fn: Callable,
+    sanitize: bool = True,
+) -> tuple[bool, Any, GovernanceError | None]:
+    """Run the governance pipeline for a single tool call.
+
+    Pipeline: build a :class:`ToolCallInput` → evaluate the policy gate
+    → check the decision → execute ``fn`` (sync callables run on a
+    thread so blocking I/O does not stall the agent loop) → sanitize
+    the result.
+
+    Returns
+    -------
+    (allowed, result, error)
+        - ``allowed=True``: ``result`` is the sanitized return value;
+          ``error`` is ``None``.
+        - ``allowed=False``: ``result`` is ``None``; ``error`` is the
+          :class:`GovernanceError` raised by the gate. Format ``error``
+          for the model however the calling framework prefers (JSON
+          payload, ``[BLOCKED]`` prefix string, etc.).
+    """
+    tc = ToolCallInput(action=action, tool_name=tool_name, args=args)
+    try:
+        decision = await gate.evaluate_tool_call(tc, context)
+        _check_decision(tool_name, decision)
+    except GovernanceError as e:
+        logger.info("Tool call blocked by governance: tool=%s reason=%s", tool_name, e)
+        return False, None, e
+
+    if inspect.iscoroutinefunction(fn):
+        result = await fn(**args)
+    else:
+        result = await asyncio.to_thread(fn, **args)
+
+    return True, _maybe_sanitize(gate, result, sanitize), None
+
+
 class BaseGovernedAdapter:
     """
     Governed tool executor base class.
@@ -87,25 +130,24 @@ class BaseGovernedAdapter:
             return {"error": f"Tool '{name}' not registered in adapter"}
 
         fn, action_name, _ = self._tools[name]
-        tc = ToolCallInput(action=action_name, tool_name=name, args=args)
 
         try:
-            decision = await self._gate.evaluate_tool_call(tc, self._context)
-            _check_decision(name, decision)
-        except GovernanceError as e:
-            logger.info("Tool call blocked by governance: tool=%s reason=%s", name, e)
-            return {"blocked": True, "reason": self._deny_message}
-
-        try:
-            if inspect.iscoroutinefunction(fn):
-                result = await fn(**args)
-            else:
-                result = await asyncio.to_thread(fn, **args)
+            allowed, result, _err = await _run_governed_call(
+                gate=self._gate,
+                context=self._context,
+                action=action_name,
+                tool_name=name,
+                args=args,
+                fn=fn,
+                sanitize=self._sanitize,
+            )
         except Exception as e:
             logger.exception("Tool execution error: tool=%s", name)
             return {"error": str(e)}
 
-        return _maybe_sanitize(self._gate, result, self._sanitize)
+        if not allowed:
+            return {"blocked": True, "reason": self._deny_message}
+        return result
 
     def _make_governed_fn(self, name: str, fn: Callable, action_name: str) -> Callable:
         """Create a governed wrapper function for a tool."""
