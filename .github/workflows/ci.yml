@@ -44,6 +44,22 @@ jobs:
           cache: pip
       - run: pip install -e ".[dev,openai,google]"
       - run: pip install pytest-cov
+      # Optional framework adapters — installed so coverage exercises the
+      # framework-specific code paths in kitelogik/adapters/. Tests gate on
+      # importability via pytest.importorskip, so missing packages would
+      # skip rather than fail, but the skipped code paths drag coverage
+      # below the 80% threshold.
+      - run: >
+          pip install
+          langchain-core
+          langgraph
+          crewai
+          openai-agents
+          pydantic-ai
+          llama-index
+          semantic-kernel
+          haystack-ai
+          google-adk
       - name: Run unit tests with coverage
         run: >
           pytest -q -m "not integration"
