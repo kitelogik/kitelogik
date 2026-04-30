@@ -266,3 +266,169 @@ async def test_real_agents_sdk_on_invoke_signature_matches(mock_gate, ctx):
     fake_ctx = object()
     out = await tool.on_invoke_tool(fake_ctx, json.dumps({"msg": "hi"}))
     assert out == "result"
+
+
+# ── Multi-agent governance helpers ──────────────────────────────────────────
+
+
+@pytest.fixture
+def allow_event_gate():
+    """Mock gate that allows agent.delegate events as well as tool calls."""
+    gate = MagicMock(spec=PolicyGate)
+    gate.evaluate_tool_call = AsyncMock(
+        return_value=PolicyDecision(
+            allow=True,
+            deny=False,
+            risk_tier=RiskTier.INFORMATIONAL,
+            requires_hitl=False,
+            reason="Allowed",
+        )
+    )
+    gate.evaluate = AsyncMock(
+        return_value=PolicyDecision(
+            allow=True,
+            deny=False,
+            risk_tier=RiskTier.INFORMATIONAL,
+            requires_hitl=False,
+            reason="Allowed",
+        )
+    )
+    gate.sanitize_response = MagicMock(return_value=MagicMock(content="result", was_modified=False))
+    return gate
+
+
+@pytest.fixture
+def deny_event_gate():
+    """Mock gate that denies agent.delegate events."""
+    gate = MagicMock(spec=PolicyGate)
+    gate.evaluate = AsyncMock(
+        return_value=PolicyDecision(
+            allow=False,
+            deny=True,
+            risk_tier=RiskTier.SECURITY_CRITICAL,
+            requires_hitl=False,
+            reason="Delegation denied by policy",
+        )
+    )
+    gate.sanitize_response = MagicMock(return_value=MagicMock(content="result", was_modified=False))
+    return gate
+
+
+def test_register_handoff_returns_real_handoff_object(allow_event_gate, ctx):
+    """``register_handoff`` returns an ``agents.Handoff`` ready for
+    ``Agent(handoffs=[...])``."""
+    pytest.importorskip("agents", reason="openai-agents not installed")
+    from agents import Agent, Handoff
+
+    from kitelogik.adapters.openai_agents import OpenAIAgentsAdapter
+
+    target = Agent(name="billing_specialist", instructions="bill")
+    adapter = OpenAIAgentsAdapter(gate=allow_event_gate, context=ctx)
+
+    h = adapter.register_handoff(target)
+    assert isinstance(h, Handoff)
+    parent = Agent(name="router", instructions="route", handoffs=[h])
+    assert len(parent.handoffs) == 1
+
+
+async def test_register_handoff_runs_user_callback_on_allow(allow_event_gate, ctx):
+    """When governance allows, the user's ``on_handoff`` callback fires."""
+    pytest.importorskip("agents", reason="openai-agents not installed")
+    from agents import Agent
+
+    from kitelogik.adapters.openai_agents import OpenAIAgentsAdapter
+
+    fired = {"n": 0}
+
+    def my_callback(_ctx):
+        fired["n"] += 1
+
+    target = Agent(name="billing", instructions="bill")
+    adapter = OpenAIAgentsAdapter(gate=allow_event_gate, context=ctx)
+    h = adapter.register_handoff(target, on_handoff=my_callback)
+
+    await h.on_invoke_handoff(None, "")
+    assert fired["n"] == 1
+    allow_event_gate.evaluate.assert_awaited_once()
+
+
+async def test_register_handoff_blocks_when_governance_denies(deny_event_gate, ctx):
+    """A denied delegation propagates an error; user callback never runs."""
+    pytest.importorskip("agents", reason="openai-agents not installed")
+    from agents import Agent
+
+    from kitelogik.adapters.openai_agents import OpenAIAgentsAdapter
+    from kitelogik.governed import GovernanceError
+
+    fired = {"n": 0}
+
+    def my_callback(_ctx):
+        fired["n"] += 1
+
+    target = Agent(name="restricted", instructions="x")
+    adapter = OpenAIAgentsAdapter(gate=deny_event_gate, context=ctx)
+    h = adapter.register_handoff(target, on_handoff=my_callback)
+
+    with pytest.raises(GovernanceError):
+        await h.on_invoke_handoff(None, "")
+    assert fired["n"] == 0
+
+
+def test_register_agent_as_tool_returns_function_tool(allow_event_gate, ctx):
+    """``register_agent_as_tool`` produces a real ``FunctionTool``."""
+    pytest.importorskip("agents", reason="openai-agents not installed")
+    from agents import Agent, FunctionTool
+
+    from kitelogik.adapters.openai_agents import OpenAIAgentsAdapter
+
+    inner = Agent(name="researcher", instructions="research")
+    adapter = OpenAIAgentsAdapter(gate=allow_event_gate, context=ctx)
+
+    tool = adapter.register_agent_as_tool(
+        inner, tool_name="ask_researcher", tool_description="Run a research query"
+    )
+    assert isinstance(tool, FunctionTool)
+    assert tool.name == "ask_researcher"
+
+
+async def test_register_agent_as_tool_blocks_invocation_when_denied(deny_event_gate, ctx):
+    """A denied delegation surfaces a JSON blocked payload to the model."""
+    pytest.importorskip("agents", reason="openai-agents not installed")
+    from agents import Agent
+
+    from kitelogik.adapters.openai_agents import OpenAIAgentsAdapter
+
+    inner = Agent(name="restricted", instructions="x")
+    adapter = OpenAIAgentsAdapter(gate=deny_event_gate, context=ctx)
+    tool = adapter.register_agent_as_tool(
+        inner, tool_name="ask_restricted", tool_description="Restricted"
+    )
+
+    out = await tool.on_invoke_tool(None, "{}")
+    payload = json.loads(out)
+    assert payload["blocked"] is True
+    assert "Delegation denied by policy" in payload["reason"]
+
+
+async def test_governed_handoff_free_function_runs_gate(allow_event_gate, ctx):
+    """The free function in ``_base`` is the framework-agnostic path: any
+    framework or hand-rolled multi-agent code can call it directly to
+    gate an ``agent.delegate`` event."""
+    from kitelogik.adapters._base import governed_handoff
+
+    await governed_handoff(
+        gate=allow_event_gate,
+        context=ctx,
+        target="downstream",
+        requested_capabilities=["read_orders"],
+    )
+    allow_event_gate.evaluate.assert_awaited_once()
+
+
+async def test_governed_handoff_free_function_raises_on_deny(deny_event_gate, ctx):
+    """Free function raises GovernanceError on deny so callers can branch."""
+    from kitelogik.adapters._base import governed_handoff
+    from kitelogik.governed import GovernanceError
+
+    with pytest.raises(GovernanceError):
+        await governed_handoff(gate=deny_event_gate, context=ctx, target="downstream")

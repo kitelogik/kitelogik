@@ -15,7 +15,7 @@ from typing import Any
 
 from kitelogik.governed import GovernanceError, _check_decision, _maybe_sanitize
 from kitelogik.tether.gate import PolicyGate
-from kitelogik.tether.models import SessionContext, ToolCallInput
+from kitelogik.tether.models import GovernanceEvent, SessionContext, ToolCallInput
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +61,53 @@ async def _run_governed_call(
         result = await asyncio.to_thread(fn, **args)
 
     return True, _maybe_sanitize(gate, result, sanitize), None
+
+
+async def governed_handoff(
+    *,
+    gate: PolicyGate,
+    context: SessionContext,
+    target: str,
+    action: str = "agent.delegate",
+    requested_capabilities: list[str] | None = None,
+) -> None:
+    """Evaluate an ``agent.delegate`` governance event before a handoff.
+
+    Generic helper for any framework (or hand-rolled multi-agent code)
+    that needs to gate cross-agent delegation. Raises
+    :class:`GovernanceError` on deny so the caller can short-circuit;
+    returns ``None`` on allow.
+
+    Parameters
+    ----------
+    gate, context
+        The configured policy gate and parent session context.
+    target
+        Identifier of the agent receiving the handoff (logged + sent
+        to the policy as ``delegation_target``).
+    action
+        OPA action name. Defaults to ``"agent.delegate"``.
+    requested_capabilities
+        Optional list of capability names the parent wants to grant the
+        child. Surfaced to the policy so scope-narrowing rules can fire.
+
+    Raises
+    ------
+    GovernanceError
+        If the policy gate denies, hard-blocks, or escalates the
+        delegation. Inspect ``error.decision`` to distinguish hard
+        deny from HITL.
+    """
+    event = GovernanceEvent(
+        event_type="agent.delegate",
+        session_id=context.session_id,
+        action=action,
+        context=context,
+        delegation_target=target,
+        requested_capabilities=requested_capabilities or [],
+    )
+    decision = await gate.evaluate(event)
+    _check_decision(action, decision)
 
 
 class BaseGovernedAdapter:
