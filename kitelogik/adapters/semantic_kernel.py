@@ -20,11 +20,30 @@ Usage
     adapter = SemanticKernelAdapter(gate=gate, context=context)
     adapter.register("get_customer", get_customer_fn, description="Get customer by ID")
 
-    # Pass governed tools to your Semantic Kernel agent:
-    tools = adapter.kernel_functions()
+    # Two equivalent ways to plug into a Kernel:
+    from semantic_kernel import Kernel
+    kernel = Kernel()
+
+    # 1. Pull the plugin instance and add it yourself:
+    kernel.add_plugin(adapter.kernel_plugin(), plugin_name="kitelogik")
+
+    # 2. Or use the convenience helper:
+    adapter.add_to_kernel(kernel, plugin_name="kitelogik")
 """
 
+import asyncio
+import functools
+import inspect
+import json
+import logging
+from collections.abc import Callable
+from typing import Any
+
 from kitelogik.adapters._base import BaseGovernedAdapter
+from kitelogik.governed import GovernanceError, _check_decision, _maybe_sanitize
+from kitelogik.tether.models import ToolCallInput
+
+logger = logging.getLogger(__name__)
 
 
 def _require_semantic_kernel():  # type: ignore[no-untyped-def]
@@ -43,23 +62,78 @@ class SemanticKernelAdapter(BaseGovernedAdapter):
     """
     Governed tool executor for Microsoft Semantic Kernel.
 
-    Wraps tool functions and routes each call through the Kite Logik
-    policy gate before execution.
+    Semantic Kernel takes a *plugin* — a regular Python object whose
+    methods are decorated with ``@kernel_function`` — and registers it
+    via ``Kernel.add_plugin(<instance>, plugin_name=...)``. This adapter
+    builds that plugin object dynamically, so every registered function
+    becomes a governed kernel function on a single plugin class.
     """
 
-    def kernel_functions(self) -> list[dict]:
+    def kernel_plugin(self) -> Any:
         """
-        Return tool definitions compatible with Semantic Kernel's function interface.
+        Return a single plugin instance whose methods are governed
+        ``@kernel_function`` methods (one per registered tool).
+        """
+        _require_semantic_kernel()
+        from semantic_kernel.functions import kernel_function  # type: ignore[import-untyped]
 
-        Each tool includes a governed wrapper function, name, and description.
-        """
-        tools = []
+        methods: dict[str, Callable] = {}
         for name, (fn, action_name, description) in self._tools.items():
-            tools.append(
-                {
-                    "name": name,
-                    "description": description,
-                    "function": self._make_governed_fn(name, fn, action_name),
-                }
-            )
-        return tools
+            method = self._build_governed_method(name, fn, action_name)
+            methods[name] = kernel_function(
+                name=name,
+                description=description or f"Governed tool: {name}",
+            )(method)
+
+        plugin_cls = type("KiteLogikGovernedPlugin", (), methods)
+        return plugin_cls()
+
+    def kernel_functions(self) -> Any:
+        """Backwards-compatible alias for :meth:`kernel_plugin`.
+
+        The original method name is preserved; the return value is the
+        plugin instance, not a list. Semantic Kernel's API surface is
+        plugin-shaped, not list-shaped.
+        """
+        return self.kernel_plugin()
+
+    def add_to_kernel(self, kernel: Any, plugin_name: str = "kitelogik") -> Any:
+        """Convenience helper — register the governed plugin on ``kernel``.
+
+        Equivalent to ``kernel.add_plugin(adapter.kernel_plugin(),
+        plugin_name=plugin_name)``. Returns the registered ``KernelPlugin``.
+        """
+        return kernel.add_plugin(self.kernel_plugin(), plugin_name=plugin_name)
+
+    def _build_governed_method(
+        self,
+        name: str,
+        fn: Callable,
+        action_name: str,
+    ) -> Callable[..., Any]:
+        """Build a governed method (sig: ``(self, **kwargs)``) for the plugin class."""
+        gate = self._gate
+        context = self._context
+        sanitize = self._sanitize
+        deny_message = self._deny_message
+
+        @functools.wraps(fn)
+        async def governed(_self: Any, **kwargs: Any) -> str:
+            tc = ToolCallInput(action=action_name, tool_name=name, args=kwargs)
+            try:
+                decision = await gate.evaluate_tool_call(tc, context)
+                _check_decision(name, decision)
+            except GovernanceError as e:
+                logger.info("Tool call blocked by governance: tool=%s reason=%s", name, e)
+                return json.dumps({"blocked": True, "reason": deny_message})
+
+            if inspect.iscoroutinefunction(fn):
+                result = await fn(**kwargs)
+            else:
+                result = await asyncio.to_thread(fn, **kwargs)
+
+            result = _maybe_sanitize(gate, result, sanitize)
+            return result if isinstance(result, str) else json.dumps(result)
+
+        governed.__name__ = name
+        return governed

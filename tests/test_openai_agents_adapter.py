@@ -56,16 +56,25 @@ def deny_gate():
 @pytest.fixture
 def stub_openai_agents(monkeypatch):
     """Install a minimal ``agents.FunctionTool`` stub so agent_tools() works
-    without the real openai-agents package. FunctionTool just stores its
-    kwargs so tests can pull out ``on_invoke_tool`` and await it."""
+    without the real openai-agents package. The stub mirrors the real
+    constructor signature exactly: ``on_invoke_tool(ctx: ToolContext, input: str)``
+    where ``input`` is a JSON-encoded args string."""
     agents_pkg = types.ModuleType("agents")
 
     class FunctionTool:  # noqa: D401 — stub mirrors the real class surface used here
-        def __init__(self, name, description, params_json_schema, on_invoke_tool):
+        def __init__(
+            self,
+            name,
+            description,
+            params_json_schema,
+            on_invoke_tool,
+            strict_json_schema=True,
+        ):
             self.name = name
             self.description = description
             self.params_json_schema = params_json_schema
             self.on_invoke_tool = on_invoke_tool
+            self.strict_json_schema = strict_json_schema
 
     agents_pkg.FunctionTool = FunctionTool
     monkeypatch.setitem(sys.modules, "agents", agents_pkg)
@@ -125,6 +134,9 @@ def test_agent_tools_builds_function_tool_with_schema(stub_openai_agents, mock_g
         "type": "object",
         "properties": {"query": {"type": "string"}},
     }
+    # strict_json_schema=False so register(params=...) doesn't have to
+    # carry the strict-mode boilerplate.
+    assert tool.strict_json_schema is False
 
 
 async def test_agent_tool_allowed_call_runs_and_sanitizes(stub_openai_agents, mock_gate, ctx):
@@ -134,7 +146,9 @@ async def test_agent_tool_allowed_call_runs_and_sanitizes(stub_openai_agents, mo
     adapter.register("search", lambda query: f"found:{query}")
 
     [tool] = adapter.agent_tools()
-    out = await tool.on_invoke_tool(query="widgets")
+    # Real Agents SDK invokes `on_invoke_tool(ctx, json_args_str)` —
+    # two positional args, second is a JSON string.
+    out = await tool.on_invoke_tool(None, json.dumps({"query": "widgets"}))
 
     assert out == "result"  # sanitize_response fixture
     mock_gate.evaluate_tool_call.assert_awaited_once()
@@ -156,7 +170,7 @@ async def test_agent_tool_denied_call_returns_blocked_json_and_skips_fn(
     adapter.register("delete_all", should_never_run)
 
     [tool] = adapter.agent_tools()
-    out = await tool.on_invoke_tool()
+    out = await tool.on_invoke_tool(None, "{}")
 
     payload = json.loads(out)
     assert payload["blocked"] is True
@@ -174,5 +188,81 @@ async def test_agent_tool_async_fn_is_awaited(stub_openai_agents, mock_gate, ctx
     adapter.register("atool", async_fn)
 
     [tool] = adapter.agent_tools()
-    out = await tool.on_invoke_tool(x="hello")
+    out = await tool.on_invoke_tool(None, json.dumps({"x": "hello"}))
+    assert out == "result"
+
+
+async def test_agent_tool_malformed_json_returns_error(stub_openai_agents, mock_gate, ctx):
+    """Regression: a malformed JSON args string must surface a clean error,
+    not an unhandled exception that the SDK propagates as a tool failure."""
+    from kitelogik.adapters.openai_agents import OpenAIAgentsAdapter
+
+    adapter = OpenAIAgentsAdapter(gate=mock_gate, context=ctx)
+    adapter.register("search", lambda **_: "ok")
+
+    [tool] = adapter.agent_tools()
+    out = await tool.on_invoke_tool(None, "{not: valid}")
+    payload = json.loads(out)
+    assert "error" in payload
+    assert "malformed" in payload["error"].lower()
+    mock_gate.evaluate_tool_call.assert_not_awaited()
+
+
+async def test_agent_tool_empty_input_treated_as_no_args(stub_openai_agents, mock_gate, ctx):
+    """An empty ``input`` is a legitimate no-arg call (the SDK passes ``""``
+    when the tool's params are empty); it must not raise."""
+    from kitelogik.adapters.openai_agents import OpenAIAgentsAdapter
+
+    adapter = OpenAIAgentsAdapter(gate=mock_gate, context=ctx)
+    adapter.register("ping", lambda: "pong")
+
+    [tool] = adapter.agent_tools()
+    out = await tool.on_invoke_tool(None, "")
+    assert out == "result"
+
+
+# ── Real openai-agents integration smoke test ──────────────────────────────
+
+agents_real = pytest.importorskip("agents", reason="openai-agents not installed")
+
+
+def test_real_agents_sdk_accepts_governed_function_tools(mock_gate, ctx):
+    """Smoke test against the real openai-agents package — governed
+    FunctionTool instances must pass the SDK's type checks so they can
+    be handed to ``Agent(tools=...)`` directly.
+    """
+    from agents import Agent, FunctionTool
+
+    from kitelogik.adapters.openai_agents import OpenAIAgentsAdapter
+
+    adapter = OpenAIAgentsAdapter(gate=mock_gate, context=ctx)
+    adapter.register(
+        "lookup",
+        lambda key: f"value:{key}",
+        description="Look up a value",
+        params={"key": {"type": "string"}},
+    )
+
+    tools = adapter.agent_tools()
+    assert all(isinstance(t, FunctionTool) for t in tools)
+
+    # Constructing the Agent must not raise — this catches schema and
+    # signature mismatches that plain unit tests miss.
+    agent = Agent(name="kl_smoke", instructions="test", tools=tools)
+    assert len(agent.tools) == 1
+
+
+async def test_real_agents_sdk_on_invoke_signature_matches(mock_gate, ctx):
+    """Calls ``on_invoke_tool`` with the real SDK calling convention
+    ``(ToolContext, json_str)`` to lock the signature contract."""
+    from kitelogik.adapters.openai_agents import OpenAIAgentsAdapter
+
+    adapter = OpenAIAgentsAdapter(gate=mock_gate, context=ctx)
+    adapter.register("echo", lambda msg: f"echo:{msg}")
+
+    [tool] = adapter.agent_tools()
+    # Pass a real-ish ToolContext-shaped object — the wrapper ignores it,
+    # so an opaque object suffices for the signature contract test.
+    fake_ctx = object()
+    out = await tool.on_invoke_tool(fake_ctx, json.dumps({"msg": "hi"}))
     assert out == "result"

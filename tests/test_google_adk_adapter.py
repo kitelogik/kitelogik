@@ -101,18 +101,52 @@ async def test_execute_unknown_tool(mock_gate, ctx):
     assert "error" in result
 
 
-def test_adk_tools_output(mock_gate, ctx):
+def test_adk_tools_returns_callables_with_preserved_signatures(mock_gate, ctx):
+    """ADK introspects the callable's signature to build its tool schema.
+    The wrapper must therefore preserve the original function's signature
+    via ``functools.wraps`` — a generic ``**kwargs`` wrapper would yield
+    no parameters and an empty schema."""
+    import inspect
+
     from kitelogik.adapters.google_adk import GoogleADKAdapter
 
+    def get_record(customer_id: str, fields: list[str] | None = None) -> str:
+        """Get a customer record."""
+        return f"record:{customer_id}"
+
     adapter = GoogleADKAdapter(gate=mock_gate, context=ctx)
-    adapter.register("tool_a", lambda: "a", description="Tool A")
-    adapter.register("tool_b", lambda: "b", description="Tool B")
+    adapter.register("get_record", get_record, description="Lookup a record")
+    adapter.register("ping", lambda: "pong", description="Ping")
 
     tools = adapter.adk_tools()
     assert len(tools) == 2
-    assert tools[0]["name"] == "tool_a"
-    assert tools[0]["description"] == "Tool A"
-    assert callable(tools[0]["function"])
+    assert all(callable(t) for t in tools)
+
+    # Original signature is preserved (so ADK can build the JSON schema).
+    sig = inspect.signature(tools[0])
+    assert "customer_id" in sig.parameters
+    assert "fields" in sig.parameters
+    assert tools[0].__name__ == "get_record"
+    assert "Get a customer record." in (tools[0].__doc__ or "")
+
+
+def test_adk_tools_plug_into_real_agent(mock_gate, ctx):
+    """Integration smoke test: governed callables must be acceptable to
+    ``google.adk.Agent(tools=...)``."""
+    pytest.importorskip("google.adk", reason="google-adk not installed")
+    from google.adk import Agent
+
+    from kitelogik.adapters.google_adk import GoogleADKAdapter
+
+    def lookup(key: str) -> str:
+        """Look up a value by key."""
+        return f"value:{key}"
+
+    adapter = GoogleADKAdapter(gate=mock_gate, context=ctx)
+    adapter.register("lookup", lookup, description="Lookup a value")
+
+    agent = Agent(name="kl_smoke", model="gemini-2.0-flash", tools=adapter.adk_tools())
+    assert len(agent.tools) == 1
 
 
 async def test_execute_async_fn(mock_gate, ctx):

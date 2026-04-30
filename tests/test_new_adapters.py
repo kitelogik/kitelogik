@@ -1,8 +1,13 @@
 # SPDX-License-Identifier: Apache-2.0
 """Tests for the LlamaIndex, Semantic Kernel, Haystack, and Dify adapters.
 
-All four adapters inherit from BaseGovernedAdapter so we parametrize
-the same test cases across all of them.
+The first set of tests parametrises generic governance-pipeline behavior
+across the four adapters via :meth:`BaseGovernedAdapter.execute`. The
+framework-specific output assertions (``llamaindex_tools()``,
+``kernel_plugin()``, ``haystack_tools()``, ``dify_tools()``) live in
+their own test sections below — each one optionally instantiates the
+real framework Agent / Kernel as a smoke test of integration shape, and
+skips when the framework package is not installed.
 """
 
 from unittest.mock import AsyncMock, MagicMock
@@ -16,13 +21,13 @@ from kitelogik.adapters.semantic_kernel import SemanticKernelAdapter
 from kitelogik.tether.gate import PolicyGate
 from kitelogik.tether.models import PolicyDecision, RiskTier, SessionContext
 
-# ── Adapter / tools-method pairs ────────────────────────────────────────────
+# ── Adapter / output-method pairs (used for generic governance tests) ───────
 
 _ADAPTERS = [
-    (LlamaIndexAdapter, "llamaindex_tools"),
-    (SemanticKernelAdapter, "kernel_functions"),
-    (HaystackAdapter, "haystack_tools"),
-    (DifyAdapter, "dify_tools"),
+    LlamaIndexAdapter,
+    SemanticKernelAdapter,
+    HaystackAdapter,
+    DifyAdapter,
 ]
 
 _IDS = ["llamaindex", "semantic_kernel", "haystack", "dify"]
@@ -103,25 +108,27 @@ def test_dify_import_guard():
         assert "dify" in str(e).lower()
 
 
-# ── Parametrized tests across all adapters ──────────────────────────────────
+# ── Generic governance-pipeline tests (BaseGovernedAdapter.execute) ────────
+# Exercise the policy gate + sanitize + dispatch pipeline that backs every
+# adapter. Framework-shape output is tested per-adapter further down.
 
 
-@pytest.mark.parametrize("adapter_cls,tools_method", _ADAPTERS, ids=_IDS)
-def test_register_chaining(adapter_cls, tools_method, mock_gate, ctx):
+@pytest.mark.parametrize("adapter_cls", _ADAPTERS, ids=_IDS)
+def test_register_chaining(adapter_cls, mock_gate, ctx):
     adapter = adapter_cls(gate=mock_gate, context=ctx)
     result = adapter.register("tool_a", lambda: "ok", description="Test")
     assert result is adapter
 
 
-@pytest.mark.parametrize("adapter_cls,tools_method", _ADAPTERS, ids=_IDS)
-def test_register_multiple(adapter_cls, tools_method, mock_gate, ctx):
+@pytest.mark.parametrize("adapter_cls", _ADAPTERS, ids=_IDS)
+def test_register_multiple(adapter_cls, mock_gate, ctx):
     adapter = adapter_cls(gate=mock_gate, context=ctx)
     adapter.register("a", lambda: "a").register("b", lambda: "b")
     assert len(adapter._tools) == 2
 
 
-@pytest.mark.parametrize("adapter_cls,tools_method", _ADAPTERS, ids=_IDS)
-async def test_execute_allowed(adapter_cls, tools_method, mock_gate, ctx):
+@pytest.mark.parametrize("adapter_cls", _ADAPTERS, ids=_IDS)
+async def test_execute_allowed(adapter_cls, mock_gate, ctx):
     adapter = adapter_cls(gate=mock_gate, context=ctx)
     adapter.register("read_data", lambda customer_id: f"data_{customer_id}")
 
@@ -130,8 +137,8 @@ async def test_execute_allowed(adapter_cls, tools_method, mock_gate, ctx):
     mock_gate.evaluate_tool_call.assert_called_once()
 
 
-@pytest.mark.parametrize("adapter_cls,tools_method", _ADAPTERS, ids=_IDS)
-async def test_execute_denied(adapter_cls, tools_method, deny_gate, ctx):
+@pytest.mark.parametrize("adapter_cls", _ADAPTERS, ids=_IDS)
+async def test_execute_denied(adapter_cls, deny_gate, ctx):
     adapter = adapter_cls(gate=deny_gate, context=ctx)
     adapter.register("delete_all", lambda: "deleted")
 
@@ -139,28 +146,15 @@ async def test_execute_denied(adapter_cls, tools_method, deny_gate, ctx):
     assert result["blocked"] is True
 
 
-@pytest.mark.parametrize("adapter_cls,tools_method", _ADAPTERS, ids=_IDS)
-async def test_execute_unknown_tool(adapter_cls, tools_method, mock_gate, ctx):
+@pytest.mark.parametrize("adapter_cls", _ADAPTERS, ids=_IDS)
+async def test_execute_unknown_tool(adapter_cls, mock_gate, ctx):
     adapter = adapter_cls(gate=mock_gate, context=ctx)
     result = await adapter.execute("nonexistent", {})
     assert "error" in result
 
 
-@pytest.mark.parametrize("adapter_cls,tools_method", _ADAPTERS, ids=_IDS)
-def test_tools_output(adapter_cls, tools_method, mock_gate, ctx):
-    adapter = adapter_cls(gate=mock_gate, context=ctx)
-    adapter.register("tool_a", lambda: "a", description="Tool A")
-    adapter.register("tool_b", lambda: "b", description="Tool B")
-
-    tools = getattr(adapter, tools_method)()
-    assert len(tools) == 2
-    assert tools[0]["name"] == "tool_a"
-    assert tools[0]["description"] == "Tool A"
-    assert callable(tools[0]["function"])
-
-
-@pytest.mark.parametrize("adapter_cls,tools_method", _ADAPTERS, ids=_IDS)
-async def test_execute_async_fn(adapter_cls, tools_method, mock_gate, ctx):
+@pytest.mark.parametrize("adapter_cls", _ADAPTERS, ids=_IDS)
+async def test_execute_async_fn(adapter_cls, mock_gate, ctx):
     async def async_tool(x: str) -> str:
         return f"async_{x}"
 
@@ -171,10 +165,137 @@ async def test_execute_async_fn(adapter_cls, tools_method, mock_gate, ctx):
     assert result == "result"  # sanitized
 
 
-@pytest.mark.parametrize("adapter_cls,tools_method", _ADAPTERS, ids=_IDS)
-def test_action_override(adapter_cls, tools_method, mock_gate, ctx):
+@pytest.mark.parametrize("adapter_cls", _ADAPTERS, ids=_IDS)
+def test_action_override(adapter_cls, mock_gate, ctx):
     adapter = adapter_cls(gate=mock_gate, context=ctx)
     adapter.register("my_tool", lambda: "ok", action="custom_action")
 
     _, action_name, _ = adapter._tools["my_tool"]
     assert action_name == "custom_action"
+
+
+# ── LlamaIndex framework-shape tests ────────────────────────────────────────
+
+
+def test_llamaindex_returns_function_tool_instances(mock_gate, ctx):
+    pytest.importorskip("llama_index.core.tools", reason="llama-index not installed")
+    from llama_index.core.tools import FunctionTool
+
+    adapter = LlamaIndexAdapter(gate=mock_gate, context=ctx)
+    adapter.register("ping", lambda: "pong", description="Ping")
+    adapter.register("echo", lambda msg: f"echo:{msg}", description="Echo")
+
+    tools = adapter.llamaindex_tools()
+    assert len(tools) == 2
+    assert all(isinstance(t, FunctionTool) for t in tools)
+    names = {t.metadata.name for t in tools}
+    assert names == {"ping", "echo"}
+
+
+async def test_llamaindex_tool_routes_through_governance(mock_gate, ctx):
+    pytest.importorskip("llama_index.core.tools", reason="llama-index not installed")
+
+    adapter = LlamaIndexAdapter(gate=mock_gate, context=ctx)
+    adapter.register("lookup", lambda key: f"value:{key}")
+
+    [tool] = adapter.llamaindex_tools()
+    # acall is the public async path that LlamaIndex agents use.
+    output = await tool.acall(key="user-1")
+    # FunctionTool wraps the raw return in a ToolOutput with a .content attr.
+    text = getattr(output, "content", str(output))
+    assert "result" in text  # sanitize_response fixture
+    mock_gate.evaluate_tool_call.assert_awaited_once()
+
+
+# ── Semantic Kernel framework-shape tests ──────────────────────────────────
+
+
+def test_semantic_kernel_returns_plugin_object(mock_gate, ctx):
+    pytest.importorskip("semantic_kernel", reason="semantic-kernel not installed")
+
+    adapter = SemanticKernelAdapter(gate=mock_gate, context=ctx)
+    adapter.register("ping", lambda: "pong", description="Ping")
+    adapter.register("echo", lambda msg: f"echo:{msg}", description="Echo")
+
+    plugin = adapter.kernel_plugin()
+    # Plugin instance has the registered names as method attributes,
+    # each carrying the @kernel_function decorator metadata.
+    assert callable(getattr(plugin, "ping", None))
+    assert callable(getattr(plugin, "echo", None))
+
+
+def test_semantic_kernel_add_to_kernel_registers_plugin(mock_gate, ctx):
+    pytest.importorskip("semantic_kernel", reason="semantic-kernel not installed")
+    from semantic_kernel import Kernel
+
+    adapter = SemanticKernelAdapter(gate=mock_gate, context=ctx)
+    adapter.register("ping", lambda: "pong", description="Ping")
+
+    kernel = Kernel()
+    plugin = adapter.add_to_kernel(kernel, plugin_name="kl_smoke")
+
+    # The plugin is registered on the kernel; SK exposes it via .plugins.
+    assert "kl_smoke" in kernel.plugins
+    assert plugin is not None
+
+
+# ── Haystack framework-shape tests ──────────────────────────────────────────
+
+
+def test_haystack_returns_tool_instances(mock_gate, ctx):
+    pytest.importorskip("haystack", reason="haystack-ai not installed")
+    from haystack.tools import Tool
+
+    adapter = HaystackAdapter(gate=mock_gate, context=ctx)
+    adapter.register(
+        "ping",
+        lambda: "pong",
+        description="Ping",
+        parameters={"type": "object", "properties": {}},
+    )
+
+    [tool] = adapter.haystack_tools()
+    assert isinstance(tool, Tool)
+    assert tool.name == "ping"
+    assert tool.description == "Ping"
+    assert tool.parameters == {"type": "object", "properties": {}}
+
+
+def test_haystack_tool_invokes_underlying_fn(mock_gate, ctx):
+    pytest.importorskip("haystack", reason="haystack-ai not installed")
+
+    adapter = HaystackAdapter(gate=mock_gate, context=ctx)
+    adapter.register(
+        "echo",
+        lambda msg: f"echo:{msg}",
+        description="Echo",
+        parameters={
+            "type": "object",
+            "properties": {"msg": {"type": "string"}},
+            "required": ["msg"],
+        },
+    )
+
+    [tool] = adapter.haystack_tools()
+    # Haystack invokes Tool.function directly with kwargs unpacked.
+    output = tool.function(msg="hi")
+    assert output == "result"  # sanitize_response fixture
+
+
+# ── Dify dict-shape (in-process testing only) ───────────────────────────────
+
+
+def test_dify_tools_returns_dict_shape(mock_gate, ctx):
+    """``dify_tools()`` returns dict descriptors for in-process governance
+    tests. Dify integration is incompatible with an in-process Python tool
+    object — Dify tools deploy as plugin artifacts (Tool subclass + YAML
+    manifest), not in-process objects. A deployable Dify integration ships
+    in a follow-up change.
+    """
+    adapter = DifyAdapter(gate=mock_gate, context=ctx)
+    adapter.register("ping", lambda: "pong", description="Ping")
+
+    tools = adapter.dify_tools()
+    assert isinstance(tools, list)
+    assert tools[0]["name"] == "ping"
+    assert callable(tools[0]["function"])

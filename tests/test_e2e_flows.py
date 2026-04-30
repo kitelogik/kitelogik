@@ -215,6 +215,17 @@ class TestAdapterE2E:
         [GoogleADKAdapter, PydanticAIAdapter],
     )
     async def test_governed_fn_wrapper(self, adapter_cls):
+        """Both adapters return framework-native tool objects:
+
+        - ``GoogleADKAdapter.adk_tools()`` — governed callables; ADK
+          auto-wraps callables passed to ``Agent(tools=...)``.
+        - ``PydanticAIAdapter.pydantic_tools()`` — ``pydantic_ai.Tool``
+          instances.
+
+        Verifies the registered name is preserved and that calling the
+        underlying governed wrapper drives the function through the
+        policy gate.
+        """
         gate = PolicyGate(opa_client=_mock_opa(allow=True))
         adapter = adapter_cls(gate=gate, context=_ctx())
 
@@ -223,17 +234,17 @@ class TestAdapterE2E:
 
         adapter.register("double", tool_fn, description="Double a number")
 
-        tools_method = getattr(
-            adapter,
-            "adk_tools" if adapter_cls is GoogleADKAdapter else "pydantic_tools",
-        )
-        tools = tools_method()
-        assert len(tools) == 1
-        assert tools[0]["name"] == "double"
-
-        # Call the governed wrapper directly
-        result = await tools[0]["function"](x=5)
-        assert result == "10"
+        if adapter_cls is GoogleADKAdapter:
+            [governed_callable] = adapter.adk_tools()
+            assert governed_callable.__name__ == "double"
+            result = await governed_callable(x=5)
+            assert result == "10"
+        else:
+            [tool] = adapter.pydantic_tools()
+            assert tool.name == "double"
+            # Tool exposes the wrapped callable on ``.function``.
+            result = await tool.function(x=5)
+            assert result == "10"
 
     async def test_unregistered_tool_returns_error(self):
         gate = PolicyGate(opa_client=_mock_opa(allow=True))

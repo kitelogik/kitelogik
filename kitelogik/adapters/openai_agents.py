@@ -21,6 +21,7 @@ Requirements
 The openai-agents package is NOT a hard dependency.
 """
 
+import asyncio
 import inspect
 import json
 import logging
@@ -82,46 +83,68 @@ class OpenAIAgentsAdapter:
         return self
 
     def agent_tools(self) -> list:
-        """Return a list of FunctionTool objects for all registered tools."""
+        """Return a list of ``FunctionTool`` objects for all registered tools.
+
+        The Agents SDK calls each tool via
+        ``on_invoke_tool(ctx: ToolContext, input: str) -> Awaitable[Any]``
+        where ``input`` is a JSON string. The wrapper parses it, runs the
+        governance pipeline, executes the registered function (sync calls
+        run in a thread to avoid blocking the agent loop), and returns
+        the sanitized result as a string. ``strict_json_schema=False`` so
+        ad-hoc schemas registered via ``register(params=...)`` aren't
+        rejected for missing strict-mode fields like
+        ``additionalProperties: false``.
+        """
         _require_openai_agents()
         from agents import FunctionTool
 
         tools = []
         for name, (fn, action_name, description, params) in self._tools.items():
-            gate = self._gate
-            context = self._context
-            sanitize = self._sanitize
-
-            async def _governed_fn(
-                _fn: Any = fn,
-                _name: str = name,
-                _action: str = action_name,
-                _sanitize: bool = sanitize,
-                **kwargs: Any,
-            ) -> str:
-                tc = ToolCallInput(action=_action, tool_name=_name, args=kwargs)
-                try:
-                    decision = await gate.evaluate_tool_call(tc, context)
-                    _check_decision(_name, decision)
-                except GovernanceError as e:
-                    return json.dumps({"blocked": True, "reason": str(e)})
-
-                if inspect.iscoroutinefunction(_fn):
-                    result = await _fn(**kwargs)
-                else:
-                    result = _fn(**kwargs)
-
-                result = _maybe_sanitize(gate, result, _sanitize)
-                return result if isinstance(result, str) else json.dumps(result)
-
-            tool = FunctionTool(
-                name=name,
-                description=description or f"Governed tool: {name}",
-                params_json_schema={
-                    "type": "object",
-                    "properties": params,
-                },
-                on_invoke_tool=_governed_fn,
+            tools.append(
+                FunctionTool(
+                    name=name,
+                    description=description or f"Governed tool: {name}",
+                    params_json_schema={"type": "object", "properties": params},
+                    on_invoke_tool=self._make_on_invoke(name, fn, action_name),
+                    strict_json_schema=False,
+                )
             )
-            tools.append(tool)
         return tools
+
+    def _make_on_invoke(
+        self,
+        name: str,
+        fn: Callable,
+        action_name: str,
+    ) -> Callable[[Any, str], Any]:
+        """Build a SDK-shaped ``on_invoke_tool`` for a single registered fn."""
+        gate = self._gate
+        context = self._context
+        sanitize = self._sanitize
+
+        async def _governed_fn(_ctx: Any, json_args: str) -> str:
+            try:
+                kwargs = json.loads(json_args) if json_args else {}
+            except json.JSONDecodeError:
+                return json.dumps({"error": "Malformed tool arguments"})
+            if not isinstance(kwargs, dict):
+                return json.dumps({"error": "Tool arguments must be a JSON object"})
+
+            tc = ToolCallInput(action=action_name, tool_name=name, args=kwargs)
+            try:
+                decision = await gate.evaluate_tool_call(tc, context)
+                _check_decision(name, decision)
+            except GovernanceError as e:
+                return json.dumps({"blocked": True, "reason": str(e)})
+
+            if inspect.iscoroutinefunction(fn):
+                result = await fn(**kwargs)
+            else:
+                # Run sync callables on a thread so a blocking I/O tool
+                # doesn't stall the agent's event loop.
+                result = await asyncio.to_thread(fn, **kwargs)
+
+            result = _maybe_sanitize(gate, result, sanitize)
+            return result if isinstance(result, str) else json.dumps(result)
+
+        return _governed_fn

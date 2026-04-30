@@ -101,18 +101,48 @@ async def test_execute_unknown_tool(mock_gate, ctx):
     assert "error" in result
 
 
-def test_pydantic_tools_output(mock_gate, ctx):
+def test_pydantic_tools_returns_real_tool_instances(mock_gate, ctx):
+    """PydanticAI accepts ``Callable | Tool`` in ``Agent(tools=...)``.
+    The adapter must produce real ``Tool`` instances so the type check
+    passes.
+    """
+    pytest.importorskip("pydantic_ai", reason="pydantic-ai not installed")
+    from pydantic_ai import Tool
+
     from kitelogik.adapters.pydantic_ai import PydanticAIAdapter
 
+    def lookup(key: str) -> str:
+        """Look up a value."""
+        return f"value:{key}"
+
     adapter = PydanticAIAdapter(gate=mock_gate, context=ctx)
-    adapter.register("tool_a", lambda: "a", description="Tool A")
-    adapter.register("tool_b", lambda: "b", description="Tool B")
+    adapter.register("lookup", lookup, description="Look up a value")
+    adapter.register("ping", lambda: "pong", description="Ping")
 
     tools = adapter.pydantic_tools()
     assert len(tools) == 2
-    assert tools[0]["name"] == "tool_a"
-    assert tools[0]["description"] == "Tool A"
-    assert callable(tools[0]["function"])
+    assert all(isinstance(t, Tool) for t in tools)
+    names = {t.name for t in tools}
+    assert names == {"lookup", "ping"}
+
+
+def test_pydantic_tools_plug_into_real_agent(mock_gate, ctx):
+    """Integration smoke: governed tools must construct a PydanticAI ``Agent``
+    without errors. ``TestModel`` lets us instantiate without an API key."""
+    pytest.importorskip("pydantic_ai", reason="pydantic-ai not installed")
+    from pydantic_ai import Agent
+    from pydantic_ai.models.test import TestModel
+
+    from kitelogik.adapters.pydantic_ai import PydanticAIAdapter
+
+    adapter = PydanticAIAdapter(gate=mock_gate, context=ctx)
+    adapter.register("ping", lambda: "pong", description="Ping")
+
+    agent = Agent(TestModel(), tools=adapter.pydantic_tools())
+    # PydanticAI normalises tools onto a `_function_toolset` (or similar
+    # internal). The fact that the constructor accepted them without
+    # raising is the contract we care about.
+    assert agent is not None
 
 
 async def test_execute_async_fn(mock_gate, ctx):

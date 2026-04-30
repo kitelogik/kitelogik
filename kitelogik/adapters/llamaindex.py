@@ -20,11 +20,24 @@ Usage
     adapter = LlamaIndexAdapter(gate=gate, context=context)
     adapter.register("get_customer", get_customer_fn, description="Get customer by ID")
 
-    # Pass governed tools to your LlamaIndex agent:
-    tools = adapter.llamaindex_tools()
+    # Pass governed FunctionTool instances to your LlamaIndex agent:
+    from llama_index.core.agent import ReActAgent
+    agent = ReActAgent.from_tools(adapter.llamaindex_tools(), llm=llm)
 """
 
+import asyncio
+import functools
+import inspect
+import json
+import logging
+from collections.abc import Callable
+from typing import Any
+
 from kitelogik.adapters._base import BaseGovernedAdapter
+from kitelogik.governed import GovernanceError, _check_decision, _maybe_sanitize
+from kitelogik.tether.models import ToolCallInput
+
+logger = logging.getLogger(__name__)
 
 
 def _require_llamaindex():  # type: ignore[no-untyped-def]
@@ -44,22 +57,77 @@ class LlamaIndexAdapter(BaseGovernedAdapter):
     Governed tool executor for LlamaIndex agents.
 
     Wraps tool functions and routes each call through the Kite Logik
-    policy gate before execution.
+    policy gate before execution. Returns a list of
+    ``llama_index.core.tools.FunctionTool`` instances.
     """
 
-    def llamaindex_tools(self) -> list[dict]:
+    def llamaindex_tools(self) -> list[Any]:
         """
-        Return tool definitions compatible with LlamaIndex's tool interface.
+        Return ``FunctionTool`` instances for all registered tools.
 
-        Each tool includes a governed wrapper function, name, and description.
+        Each tool is built via ``FunctionTool.from_defaults`` with both
+        a sync ``fn`` and an ``async_fn`` populated by the same governed
+        wrapper, so LlamaIndex agents that prefer ``acall`` (async path)
+        and those that go through ``call`` (sync path) both flow through
+        the policy gate. Sync registered functions run on a thread pool
+        to avoid stalling the agent's event loop.
         """
-        tools = []
+        _require_llamaindex()
+        from llama_index.core.tools import FunctionTool  # type: ignore[import-untyped]
+
+        tools: list[Any] = []
         for name, (fn, action_name, description) in self._tools.items():
+            governed_async = self._build_governed_async(name, fn, action_name)
+            governed_sync = self._build_governed_sync(governed_async)
             tools.append(
-                {
-                    "name": name,
-                    "description": description,
-                    "function": self._make_governed_fn(name, fn, action_name),
-                }
+                FunctionTool.from_defaults(
+                    fn=governed_sync,
+                    async_fn=governed_async,
+                    name=name,
+                    description=description or f"Governed tool: {name}",
+                )
             )
         return tools
+
+    def _build_governed_async(
+        self,
+        name: str,
+        fn: Callable,
+        action_name: str,
+    ) -> Callable[..., Any]:
+        """Async governed wrapper preserving fn's signature."""
+        gate = self._gate
+        context = self._context
+        sanitize = self._sanitize
+        deny_message = self._deny_message
+
+        @functools.wraps(fn)
+        async def governed(**kwargs: Any) -> str:
+            tc = ToolCallInput(action=action_name, tool_name=name, args=kwargs)
+            try:
+                decision = await gate.evaluate_tool_call(tc, context)
+                _check_decision(name, decision)
+            except GovernanceError as e:
+                logger.info("Tool call blocked by governance: tool=%s reason=%s", name, e)
+                return json.dumps({"blocked": True, "reason": deny_message})
+
+            if inspect.iscoroutinefunction(fn):
+                result = await fn(**kwargs)
+            else:
+                result = await asyncio.to_thread(fn, **kwargs)
+
+            result = _maybe_sanitize(gate, result, sanitize)
+            return result if isinstance(result, str) else json.dumps(result)
+
+        governed.__name__ = name
+        return governed
+
+    def _build_governed_sync(self, governed_async: Callable) -> Callable[..., Any]:
+        """Sync wrapper that bridges to the async governed callable."""
+        from kitelogik.governed import _run_coroutine_sync
+
+        @functools.wraps(governed_async)
+        def sync_wrapper(**kwargs: Any) -> str:
+            return _run_coroutine_sync(governed_async(**kwargs))  # type: ignore[no-any-return]
+
+        return sync_wrapper
