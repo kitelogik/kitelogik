@@ -125,6 +125,11 @@ jobs:
           cache: pip
       - run: pip install -e ".[dev]"
       - uses: pypa/gh-action-pip-audit@v1.1.0
+        with:
+          # CVE-2026-3219: pip handles concatenated tar/ZIP files ambiguously.
+          # No fix available upstream; revisit when pip ships a patched release.
+          ignore-vulns: |
+            CVE-2026-3219
 
   secrets:
     name: Secret scan (gitleaks)
