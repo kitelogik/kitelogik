@@ -4,6 +4,27 @@ All notable changes to Kite Logik are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] — 2026-04-30
+
+### Added
+- Governed handoffs and agent-as-tool for OpenAI Agents SDK (#18) (*adapters*) (4c1c661)
+- OTel parent span on tool calls + duplicate-name guard (#19) (*adapters*) (fe9b61b)
+
+
+### Changed
+- Centralise governance pipeline into _run_governed_call (#17) (*adapters*) (9420164)
+
+
+### Documentation
+- Align test count + fix relative links for PyPI (#20) (*readme*) (77a58d9)
+
+
+### Fixed
+- Preserve args_schema in govern_toolkit; drop deprecated event-loop API (#14) (*adapters*) (88972e5)
+- Make 5 broken adapters functional + correct OpenAI Agents signature (#15) (*adapters*) (6e2eba9)
+- Redesign Dify adapter with plugin-base class (#16) (*adapters*) (8c2bff2)
+
+
 ## [0.2.1] — 2026-04-27
 
 ### Documentation
