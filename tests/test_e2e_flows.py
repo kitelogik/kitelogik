@@ -226,6 +226,11 @@ class TestAdapterE2E:
         underlying governed wrapper drives the function through the
         policy gate.
         """
+        if adapter_cls is PydanticAIAdapter:
+            pytest.importorskip("pydantic_ai", reason="pydantic-ai not installed")
+        if adapter_cls is GoogleADKAdapter:
+            pytest.importorskip("google.adk", reason="google-adk not installed")
+
         gate = PolicyGate(opa_client=_mock_opa(allow=True))
         adapter = adapter_cls(gate=gate, context=_ctx())
 
