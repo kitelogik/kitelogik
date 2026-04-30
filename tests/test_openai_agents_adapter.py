@@ -99,6 +99,16 @@ def test_openai_agents_adapter_register(mock_gate, ctx):
     assert result is adapter  # chaining
 
 
+def test_register_raises_on_duplicate_name(mock_gate, ctx):
+    """OpenAIAgentsAdapter.register raises on duplicate names."""
+    from kitelogik.adapters.openai_agents import OpenAIAgentsAdapter
+
+    adapter = OpenAIAgentsAdapter(gate=mock_gate, context=ctx)
+    adapter.register("ping", lambda: "pong")
+    with pytest.raises(ValueError, match="already registered"):
+        adapter.register("ping", lambda: "twice")
+
+
 def test_openai_agents_adapter_register_with_params(mock_gate, ctx):
     from kitelogik.adapters.openai_agents import OpenAIAgentsAdapter
 

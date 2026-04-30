@@ -71,7 +71,18 @@ class CrewAIAdapter:
         description: str = "",
         action: str | None = None,
     ) -> "CrewAIAdapter":
-        """Register a tool function. Returns self for chaining."""
+        """Register a tool function. Returns self for chaining.
+
+        Raises
+        ------
+        ValueError
+            If a tool with ``name`` is already registered.
+        """
+        if name in self._tools:
+            raise ValueError(
+                f"Tool '{name}' is already registered on this adapter. "
+                f"Choose a different name or unregister it first."
+            )
         self._tools[name] = (fn, action or name, description)
         return self
 

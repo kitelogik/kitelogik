@@ -268,6 +268,15 @@ def test_execute_sync_outside_event_loop(gate, ctx, mock_opa, allow_dec):
     assert "pong" in result["content"]
 
 
+def test_register_raises_on_duplicate_name(gate, ctx):
+    """OpenAIAdapter.register has its own override; verify it raises on
+    duplicates so behavior is consistent across adapters."""
+    adapter = OpenAIAdapter(gate=gate, context=ctx)
+    adapter.register("ping", lambda: "pong")
+    with pytest.raises(ValueError, match="already registered"):
+        adapter.register("ping", lambda: "twice")
+
+
 async def test_execute_sync_inside_event_loop(gate, ctx, mock_opa, allow_dec):
     """When called from inside an existing event loop (Jupyter, FastAPI),
     execute_sync must hand off to a thread pool instead of crashing on

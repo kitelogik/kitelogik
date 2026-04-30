@@ -174,6 +174,17 @@ def test_action_override(adapter_cls, mock_gate, ctx):
     assert action_name == "custom_action"
 
 
+@pytest.mark.parametrize("adapter_cls", _ADAPTERS, ids=_IDS)
+def test_register_raises_on_duplicate_name(adapter_cls, mock_gate, ctx):
+    """Registering the same tool name twice raises ValueError instead of
+    silently clobbering the first registration."""
+    adapter = adapter_cls(gate=mock_gate, context=ctx)
+    adapter.register("greet", lambda: "hello")
+
+    with pytest.raises(ValueError, match="already registered"):
+        adapter.register("greet", lambda: "world")
+
+
 # ── LlamaIndex framework-shape tests ────────────────────────────────────────
 
 

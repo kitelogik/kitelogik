@@ -13,11 +13,14 @@ import logging
 from collections.abc import Callable
 from typing import Any
 
+from opentelemetry import trace
+
 from kitelogik.governed import GovernanceError, _check_decision, _maybe_sanitize
 from kitelogik.tether.gate import PolicyGate
 from kitelogik.tether.models import GovernanceEvent, SessionContext, ToolCallInput
 
 logger = logging.getLogger(__name__)
+_tracer = trace.get_tracer("kitelogik.adapter")
 
 
 async def _run_governed_call(
@@ -47,20 +50,27 @@ async def _run_governed_call(
           for the model however the calling framework prefers (JSON
           payload, ``[BLOCKED]`` prefix string, etc.).
     """
-    tc = ToolCallInput(action=action, tool_name=tool_name, args=args)
-    try:
-        decision = await gate.evaluate_tool_call(tc, context)
-        _check_decision(tool_name, decision)
-    except GovernanceError as e:
-        logger.info("Tool call blocked by governance: tool=%s reason=%s", tool_name, e)
-        return False, None, e
+    with _tracer.start_as_current_span("kitelogik.adapter.tool_call") as span:
+        span.set_attribute("kitelogik.tool.name", tool_name)
+        span.set_attribute("kitelogik.tool.action", action)
+        span.set_attribute("kitelogik.session_id", context.session_id)
 
-    if inspect.iscoroutinefunction(fn):
-        result = await fn(**args)
-    else:
-        result = await asyncio.to_thread(fn, **args)
+        tc = ToolCallInput(action=action, tool_name=tool_name, args=args)
+        try:
+            decision = await gate.evaluate_tool_call(tc, context)
+            _check_decision(tool_name, decision)
+        except GovernanceError as e:
+            logger.info("Tool call blocked by governance: tool=%s reason=%s", tool_name, e)
+            span.set_attribute("kitelogik.allowed", False)
+            return False, None, e
 
-    return True, _maybe_sanitize(gate, result, sanitize), None
+        if inspect.iscoroutinefunction(fn):
+            result = await fn(**args)
+        else:
+            result = await asyncio.to_thread(fn, **args)
+
+        span.set_attribute("kitelogik.allowed", True)
+        return True, _maybe_sanitize(gate, result, sanitize), None
 
 
 async def governed_handoff(
@@ -162,7 +172,18 @@ class BaseGovernedAdapter:
                 OPA action name override. Defaults to ``name``.
 
         Returns self for chaining.
+
+        Raises
+        ------
+        ValueError
+            If a tool with ``name`` is already registered. Use a
+            different name or unregister the existing tool first.
         """
+        if name in self._tools:
+            raise ValueError(
+                f"Tool '{name}' is already registered on this adapter. "
+                f"Choose a different name or unregister it first."
+            )
         desc = description or (fn.__doc__ or "").strip().split("\n")[0] or f"Call {name}"
         self._tools[name] = (fn, action or name, desc)
         return self

@@ -100,6 +100,16 @@ def test_crewai_adapter_register_multiple(mock_gate, ctx):
     assert len(adapter._tools) == 2
 
 
+def test_crewai_register_raises_on_duplicate_name(mock_gate, ctx):
+    """CrewAIAdapter.register raises on duplicate names."""
+    from kitelogik.adapters.crewai import CrewAIAdapter
+
+    adapter = CrewAIAdapter(gate=mock_gate, context=ctx)
+    adapter.register("ping", lambda: "pong")
+    with pytest.raises(ValueError, match="already registered"):
+        adapter.register("ping", lambda: "twice")
+
+
 # ── Governance-flow tests (use the stub_crewai fixture) ────────────────────
 
 
