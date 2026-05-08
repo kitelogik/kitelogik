@@ -139,6 +139,10 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
+      # Upgrade pip itself so pip-audit doesn't flag the runner's pip for
+      # vulnerabilities that have already been patched upstream (e.g.
+      # CVE-2026-6357, fixed in pip 26.1).
+      - run: python -m pip install --upgrade pip
       - run: pip install -e ".[dev]"
       - uses: pypa/gh-action-pip-audit@v1.1.0
         with:
