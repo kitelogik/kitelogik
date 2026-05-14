@@ -1,7 +1,8 @@
 # Kite Logik
 
 [![CI](https://github.com/kitelogik/kitelogik/actions/workflows/ci.yml/badge.svg)](https://github.com/kitelogik/kitelogik/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-625%20passing-brightgreen)](https://github.com/kitelogik/kitelogik/actions)
+[![Tests](https://img.shields.io/badge/tests-640%20passing-brightgreen)](https://github.com/kitelogik/kitelogik/actions)
+[![Coverage](https://codecov.io/gh/kitelogik/kitelogik/branch/main/graph/badge.svg)](https://codecov.io/gh/kitelogik/kitelogik)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](https://github.com/kitelogik/kitelogik/blob/main/LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue)](https://www.python.org)
 [![PyPI](https://img.shields.io/pypi/v/kitelogik.svg)](https://pypi.org/project/kitelogik/)
@@ -356,7 +357,7 @@ For enterprise licensing: [licensing@kitelogik.com](mailto:licensing@kitelogik.c
 python -m venv .venv && .venv/bin/pip install -e ".[dev]"
 docker compose up -d opa    # start OPA policy engine
 
-make test           # 625 tests passing (544 unit + 85 adversarial; integration suite runs separately)
+make test           # 640 tests passing (555 unit + 85 adversarial; integration suite runs separately)
 make lint           # ruff check + format
 
 # Policy management
