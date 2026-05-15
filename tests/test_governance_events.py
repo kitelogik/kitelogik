@@ -7,6 +7,7 @@ governance, and plan-before-execute.
 
 from unittest.mock import AsyncMock, MagicMock
 
+import httpx
 import pytest
 
 from kitelogik.governed import GovernanceError, GovernedToolbox
@@ -214,6 +215,64 @@ class TestOPAClientEvaluateEvent:
         decision = await client.evaluate_event(event)
         assert decision.deny is True
         assert decision.risk_tier == RiskTier.SECURITY_CRITICAL
+
+
+class TestOPAConnectionErrorMessages:
+    """Each httpx failure mode should produce an actionable OPAConnectionError.
+
+    These tests assert the recovery-guidance substrings so operators see
+    "what to do next" at the point of failure rather than having to consult
+    the docs from a generic message.
+    """
+
+    async def test_connect_error_message_includes_docker_hint(self):
+        client = OPAClient(base_url="http://localhost:8181")
+        mock_httpx = MagicMock()
+        mock_httpx.post = AsyncMock(side_effect=httpx.ConnectError("refused"))
+        client._get_client = MagicMock(return_value=mock_httpx)
+
+        with pytest.raises(OPAConnectionError) as exc_info:
+            await client._post_to_opa({"action": "noop"})
+
+        msg = str(exc_info.value)
+        assert "Cannot reach OPA at http://localhost:8181" in msg
+        assert "docker compose up -d opa" in msg
+
+    async def test_timeout_error_message_includes_docker_hint(self):
+        client = OPAClient(base_url="http://localhost:8181")
+        mock_httpx = MagicMock()
+        mock_httpx.post = AsyncMock(side_effect=httpx.TimeoutException("slow"))
+        client._get_client = MagicMock(return_value=mock_httpx)
+
+        with pytest.raises(OPAConnectionError) as exc_info:
+            await client._post_to_opa({"action": "noop"})
+
+        msg = str(exc_info.value)
+        assert "timed out" in msg
+        assert "docker compose up -d opa" in msg
+
+    async def test_http_error_message_points_at_policy_bundle(self):
+        client = OPAClient(base_url="http://localhost:8181")
+        mock_response = MagicMock()
+        mock_response.status_code = 404
+        mock_response.text = "package not found"
+        mock_response.raise_for_status = MagicMock(
+            side_effect=httpx.HTTPStatusError(
+                "404",
+                request=MagicMock(),
+                response=mock_response,
+            )
+        )
+        mock_httpx = MagicMock()
+        mock_httpx.post = AsyncMock(return_value=mock_response)
+        client._get_client = MagicMock(return_value=mock_httpx)
+
+        with pytest.raises(OPAConnectionError) as exc_info:
+            await client._post_to_opa({"action": "noop"})
+
+        msg = str(exc_info.value)
+        assert "404" in msg
+        assert "kitelogik/main" in msg
 
 
 # ── PolicyGate.evaluate tests ────────────────────────────────────────────────

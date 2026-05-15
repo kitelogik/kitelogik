@@ -4,6 +4,20 @@ All notable changes to Kite Logik are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- `OPAConnectionError` messages now include a recovery hint (the
+  `docker compose up -d opa` command and the OPAClient base_url override)
+  at each httpx failure mode — connect refused, request timeout, and
+  non-2xx HTTP responses. The HTTP-status branch additionally points at
+  the policy-bundle and `kitelogik/main` package as the likely cause.
+- `GovernanceError.__str__` now appends `(rule: <rule_matched>)` when the
+  underlying `PolicyDecision` names a specific Rego rule, so a developer
+  sees which rule fired without unpacking `exc.decision`. The message is
+  unchanged when `rule_matched` is `None`.
+
+
 ## [0.3.0] — 2026-04-30
 
 ### Added

@@ -10,6 +10,11 @@ from .models import GovernanceEvent, PolicyDecision, PolicyInput, result_to_deci
 
 logger = logging.getLogger(__name__)
 
+_OPA_RECOVERY_HINT = (
+    "Start OPA locally with `docker compose up -d opa`, "
+    "or pass base_url=... to OPAClient pointing at your bundle server."
+)
+
 
 class OPAConnectionError(Exception):
     """Raised when the OPA server cannot be reached or returns an error."""
@@ -105,13 +110,18 @@ class OPAClient:
             response.raise_for_status()
         except httpx.ConnectError as exc:
             raise OPAConnectionError(
-                f"Cannot reach OPA at {self.base_url}. Run: docker-compose up opa"
+                f"Cannot reach OPA at {self.base_url}. {_OPA_RECOVERY_HINT}"
             ) from exc
         except httpx.TimeoutException as exc:
-            raise OPAConnectionError(f"OPA request timed out after 5s ({self.base_url})") from exc
+            raise OPAConnectionError(
+                f"OPA request to {self.base_url} timed out after 5s. "
+                f"Check OPA is reachable and not overloaded. {_OPA_RECOVERY_HINT}"
+            ) from exc
         except httpx.HTTPStatusError as exc:
             raise OPAConnectionError(
-                f"OPA returned HTTP {exc.response.status_code}: {exc.response.text}"
+                f"OPA returned HTTP {exc.response.status_code} from {self.base_url}: "
+                f"{exc.response.text}. "
+                "Check the policy bundle is loaded and the kitelogik/main package is present."
             ) from exc
 
         return dict(response.json().get("result", {}))

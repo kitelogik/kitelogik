@@ -88,6 +88,12 @@ class GovernanceError(Exception):
         super().__init__(message)
         self.decision = decision
 
+    def __str__(self) -> str:
+        base = super().__str__()
+        if self.decision.rule_matched:
+            return f"{base} (rule: {self.decision.rule_matched})"
+        return base
+
 
 class governed:
     """

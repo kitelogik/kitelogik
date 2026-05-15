@@ -320,3 +320,37 @@ async def test_governance_error_message_includes_reason(gate, ctx, mock_opa, blo
         await tool()
 
     assert "Hard blocked" in str(exc_info.value)
+
+
+class TestGovernanceErrorStr:
+    """GovernanceError.__str__ should surface rule_matched when the decision
+    names it, so a developer sees which Rego rule fired without unpacking
+    exc.decision. The message stays backward-compatible when rule_matched
+    is None (e.g. fail-closed paths)."""
+
+    def test_str_appends_rule_matched_when_present(self):
+        decision = PolicyDecision(
+            allow=False,
+            deny=True,
+            risk_tier=RiskTier.SECURITY_CRITICAL,
+            requires_hitl=False,
+            reason="amount over limit",
+            rule_matched="financial.deny_high_value_refund",
+        )
+        err = GovernanceError("Tool 'issue_refund' hard blocked", decision=decision)
+
+        assert "Tool 'issue_refund' hard blocked" in str(err)
+        assert "rule: financial.deny_high_value_refund" in str(err)
+
+    def test_str_omits_rule_clause_when_rule_matched_is_none(self):
+        decision = PolicyDecision(
+            allow=False,
+            deny=True,
+            risk_tier=RiskTier.SECURITY_CRITICAL,
+            requires_hitl=False,
+            reason="OPA unreachable",
+            rule_matched=None,
+        )
+        err = GovernanceError("Tool 'noop' denied", decision=decision)
+
+        assert str(err) == "Tool 'noop' denied"
