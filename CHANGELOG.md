@@ -17,6 +17,13 @@ Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   sees which rule fired without unpacking `exc.decision`. The message is
   unchanged when `rule_matched` is `None`.
 
+### Documentation
+- `SECURITY.md` adds a Deployment Hardening section flagging that the
+  bundled `docker-compose.yml` binds OPA to `0.0.0.0:8181` for local
+  convenience and the OPA REST API ships without authentication, with
+  guidance to bind `127.0.0.1` / front with a reverse proxy / review
+  OPA's `server` configuration in production.
+
 
 ## [0.3.0] — 2026-04-30
 

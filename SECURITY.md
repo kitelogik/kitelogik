@@ -67,6 +67,14 @@ Kite Logik is designed around a few primary attack classes we actively defend ag
 
 If your report relates to one of these classes, reference it in your advisory — it helps us triage quickly.
 
+## Deployment Hardening
+
+The bundled `docker-compose.yml` is a quick-start aid for local development. It binds OPA to `0.0.0.0:8181` so the agent process (running on the host) can reach the policy engine without extra configuration. In production:
+
+- **Restrict network exposure.** Bind OPA to `127.0.0.1` (co-located agent and policy engine) or to a private-network interface only. The OPA REST API has no authentication by default — anyone who can reach `:8181` can read policy bundles and submit evaluation requests.
+- **Front it with a reverse proxy if remote.** When the agent runs on a different host, put OPA behind a reverse proxy that terminates TLS and enforces authentication (mTLS, an auth header, or your service mesh's identity layer).
+- **Review OPA's server configuration.** Disable any diagnostic or debug endpoints you do not actively use. See OPA's [Configuration → Server](https://www.openpolicyagent.org/docs/latest/configuration/#server) for the available knobs.
+
 ## Credit
 
 Reporters of valid vulnerabilities (CVSS ≥ 4.0) are:
