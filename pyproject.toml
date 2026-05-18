@@ -68,29 +68,6 @@ dev = [
 openai = ["openai>=1.0.0"]
 google = ["google-genai>=0.3.0"]
 
-# ── Enterprise extension points ───────────────────────────────────────────────
-# The kitelogik-enterprise package registers its implementations here.
-# OSS code discovers them via kitelogik.edition.load_plugin(group).
-# This section is intentionally empty in the OSS package — it documents the
-# contract that enterprise (or third-party) extensions must implement.
-#
-# kitelogik-enterprise's pyproject.toml will contain entries like:
-#
-#   [project.entry-points."kitelogik.sandbox_runtime"]
-#   default = "kitelogik_enterprise.sandbox.firecracker:FirecrackerRuntime"
-#
-#   [project.entry-points."kitelogik.memory_backend"]
-#   default = "kitelogik_enterprise.memory.postgres:PostgresMemoryBackend"
-#
-#   [project.entry-points."kitelogik.hitl_backend"]
-#   default = "kitelogik_enterprise.anchor.postgres:PostgresHITLQueue"
-#
-#   [project.entry-points."kitelogik.credential_broker"]
-#   default = "kitelogik_enterprise.anchor.vault:VaultCredentialBroker"
-#
-#   [project.entry-points."kitelogik.audit_backend"]
-#   default = "kitelogik_enterprise.audit.postgres:PostgresAuditStore"
-
 [tool.setuptools.packages.find]
 include = ["kitelogik*"]
 exclude = ["tests*", ".venv*", "examples*", "benchmarks*", "dev*"]

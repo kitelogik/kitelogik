@@ -6,6 +6,3 @@ contact_links:
   - name: Questions & discussions
     url: https://github.com/kitelogik/kitelogik/discussions
     about: Ask usage questions or start a design discussion.
-  - name: Enterprise enquiries
-    url: https://www.kitelogik.com/#cta
-    about: Reach out about SSO, HA, compliance exports, and managed deployments.

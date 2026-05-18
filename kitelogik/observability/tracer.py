@@ -58,7 +58,6 @@ def setup_tracer(
     if testing:
         pass  # in-memory only — no file/network I/O
     elif otlp_endpoint:
-        # Enterprise: also forward to external collector (Tempo/Jaeger/etc.)
         from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 
         exporter = OTLPSpanExporter(endpoint=f"{otlp_endpoint.rstrip('/')}/v1/traces")

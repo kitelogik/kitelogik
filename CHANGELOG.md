@@ -23,6 +23,17 @@ Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   convenience and the OPA REST API ships without authentication, with
   guidance to bind `127.0.0.1` / front with a reverse proxy / review
   OPA's `server` configuration in production.
+- `README.md` replaces the "OSS vs Enterprise" comparison table with a
+  single "Features" section that enumerates what ships in this Apache-2.0
+  package. The Enterprise Governance Gateway callout under Deployment
+  Modes and the `licensing@kitelogik.com` contact line are removed.
+- `NOTICE` drops the `COMMERCIAL LICENSING` block.
+- `pyproject.toml` drops the Enterprise extension-points comment block;
+  the actual plugin contract still lives in `kitelogik.edition`.
+- `.github/ISSUE_TEMPLATE/config.yml` drops the Enterprise enquiries
+  contact link.
+- `kitelogik/observability/tracer.py` drops a stale `# Enterprise:`
+  comment from a code path that ships in OSS (OTLP forwarding).
 
 
 ## [0.3.0] — 2026-04-30

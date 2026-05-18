@@ -83,8 +83,6 @@ Governance Event → Credential Check → OPA Evaluation → ALLOW / DENY
 |---|---|---|
 | **Embedded SDK** | Individual developers & teams | `@governed` decorator wraps tool functions in-process. Zero network hop. Add governance to any agent in 3 lines. |
 
-> **Enterprise:** The Governance Gateway (centralized HTTP API enforcement) is available in [Kite Logik Enterprise](mailto:licensing@kitelogik.com).
-
 ## Getting Started
 
 > **Prerequisite:** Kite Logik evaluates every governance event through an OPA policy engine over HTTP. You need OPA reachable at `http://localhost:8181` before any of the examples below will succeed — without it, `PolicyGate` fails closed and every call raises `GovernanceError`. The easiest path is Docker; the scaffold below writes a ready-to-use `docker-compose.yml`.
@@ -299,57 +297,27 @@ kitelogik/
 tests/              640 tests across unit, integration, adversarial, fuzz, benchmark suites
 ```
 
-## OSS vs Enterprise
+## Features
 
-The OSS gives you the full governance pipeline for your agents. Enterprise gives you governance at organizational scale.
+Everything in this repository is Apache-2.0 and self-hostable. There is no paid tier gating any of it.
 
-| Feature | OSS | Enterprise |
-|---|:---:|:---:|
-| **Governance Pipeline** | | |
-| OPA policy engine (Tether) | Y | Y |
-| Regorus in-process Rego engine (experimental) | Y | Y |
-| YAML policy frontend (`kitelogik compile`) | Y | Y |
-| 2-tier policy hierarchy (global + project) | Y | Y |
-| Tool call governance | Y | Y |
-| Agent lifecycle governance (spawn, delegate, plan) | Y | Y |
-| Resource budget enforcement | Y | Y |
-| Data classification labels | Y | Y |
-| Compliance CLI with OWASP ASI mapping | Y | Y |
-| Cross-agent governance (org-wide budgets) | | Y |
-| **Runtime** | | |
-| Docker sandbox (network isolation, resource limits) | | Y |
-| Firecracker MicroVM | | Y |
-| **Credentials & Access** | | |
-| Session-scoped credentials with delegation | Y | Y |
-| SSO (SAML/OIDC) | | Y |
-| RBAC (Admin, Author, Operator, Viewer) | | Y |
-| **Storage** | | |
-| SQLite backends (HITL, credentials, audit, memory) | Y | Y |
-| PostgreSQL backends (HA, connection pooling) | | Y |
-| **Observability** | | |
-| OpenTelemetry tracing | Y | Y |
-| Prometheus `/metrics` endpoint | | Y |
-| Real-time governance dashboard | | Y |
-| SIEM webhook (Splunk, Datadog, Elastic) | | Y |
-| Policy intelligence dashboard (analytics) | | Y |
-| **Operations** | | |
-| Starter policy library | Y | Y |
-| Governance Gateway (centralized HTTP API) | | Y |
-| Orchestrator (multi-agent delegation coordination) | | Y |
-| Compliance export packs (SOC 2, HIPAA, FedRAMP) | | Y |
-| Agent fleet management | | Y |
-| Multi-tenant policy isolation | | Y |
-| Policy simulation / what-if analysis | | Y |
-| Governance marketplace (compliance packs) | | Y |
-| **Framework Adapters** | | |
-| OpenAI, LangChain, CrewAI, OpenAI Agents SDK, LangGraph | Y | Y |
-| Google ADK, PydanticAI, LlamaIndex, Semantic Kernel, Haystack, Dify | Y | Y |
-| **HITL** | | |
-| HITL queue (high-stakes escalation) | Y | Y |
-| Anchor API (REST endpoints for HITL approval) | | Y |
-| HITL SLA tracking | | Y |
+**Governance pipeline**
+- OPA policy engine (Tether) with an experimental in-process Regorus engine
+- YAML policy frontend (`kitelogik compile`) plus a starter policy library
+- 2-tier policy hierarchy (global + project)
+- Tool-call governance, agent lifecycle governance (spawn, delegate, plan), and resource-budget enforcement
+- Data classification labels
+- Compliance CLI with OWASP ASI mapping
 
-For enterprise licensing: [licensing@kitelogik.com](mailto:licensing@kitelogik.com)
+**Credentials, storage, observability**
+- Session-scoped credentials with delegation (issue / validate / delegate / revoke)
+- SQLite backends for HITL, credentials, audit, and memory
+- OpenTelemetry tracing with session-scoped correlation
+- HITL queue for high-stakes escalation
+
+**Framework adapters (11)**
+- OpenAI, LangChain, LangGraph, CrewAI, OpenAI Agents SDK
+- Google ADK, PydanticAI, LlamaIndex, Semantic Kernel, Haystack, Dify
 
 ## Development
 
