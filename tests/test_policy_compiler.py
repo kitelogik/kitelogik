@@ -39,15 +39,18 @@ class TestPolicySchema:
                 then="allow",
             )
 
-    def test_invalid_package_name(self):
-        with pytest.raises(Exception):
-            PolicyFile(
-                version=1,
-                package="Invalid Package",
-                rules=[
-                    Rule(name="test_rule", when={"action": "test"}, then="allow"),
-                ],
-            )
+    def test_legacy_package_field_ignored(self):
+        # The `package` field was removed; an old YAML that still carries
+        # it must keep parsing. The value is ignored — compiled output
+        # always targets kitelogik.userpolicy.
+        pf = PolicyFile.model_validate(
+            {
+                "version": 1,
+                "package": "kitelogik.legacy",
+                "rules": [{"name": "r", "when": {"action": "x"}, "then": "allow"}],
+            }
+        )
+        assert len(pf.rules) == 1
 
     def test_empty_rules_rejected(self):
         with pytest.raises(Exception):
@@ -80,11 +83,12 @@ rules:
     reason: "Database deletion not permitted"
 """
         rego = compile_yaml_string(yaml_src)
-        assert "package kitelogik.test" in rego
+        # All compiled policies land in the shared userpolicy package.
+        assert "package kitelogik.userpolicy" in rego
         assert "import future.keywords.if" in rego
-        # Deny rules with reasons compile to set-valued deny[msg],
-        # which needs no boolean default (empty set is the default).
+        # Merge-safe output declares no defaults; deny is set-valued.
         assert "default deny := false" not in rego
+        assert "default allow" not in rego
         assert '"Database deletion not permitted"' in rego
         assert 'input.action == "delete_database"' in rego
 
@@ -103,7 +107,8 @@ rules:
     risk_tier: INFORMATIONAL
 """
         rego = compile_yaml_string(yaml_src)
-        assert "default allow := false" in rego
+        # No defaults — the userpolicy.rego stub owns `default allow`.
+        assert "default allow" not in rego
         assert "allow if {" in rego
         assert 'input.action in {"read_customer", "list_transactions"}' in rego
         assert '"read_customer" in input.context.session_scopes' in rego
@@ -244,8 +249,8 @@ rules:
     reason: "No deletions"
 """
         rego = compile_yaml_string(yaml_src)
-        assert "default allow := false" in rego
-        # deny[msg] is set-valued — no boolean default needed
+        # Merge-safe: no defaults; allow incremental; deny set-valued.
+        assert "default allow" not in rego
         assert "default deny := false" not in rego
         assert "allow if {" in rego
         assert 'deny["No deletions"] if {' in rego
@@ -275,6 +280,27 @@ rules:
         assert "default hitl := false" not in rego  # set-valued, not boolean
         # Must NOT compile as a deny — that would hard-block instead of HITL.
         assert "deny" not in rego.replace("# ", "")  # ignore the comment line
+
+    def test_reasonless_deny_is_set_valued_keyed_on_name(self):
+        """A `then: deny` with no reason compiles to a set-valued rule
+        keyed on the rule name — never a boolean `deny if {}`.
+
+        The boolean form was the source of the collision bug: a boolean
+        `deny` in one file and a set-valued `deny[msg]` in another (or in
+        the aggregating main.rego) is a type conflict. Keying on the rule
+        name keeps every compiled deny mergeable.
+        """
+        yaml_src = """
+version: 1
+rules:
+  - name: block_shell
+    when:
+      action: run_shell_command
+    then: deny
+"""
+        rego = compile_yaml_string(yaml_src)
+        assert 'deny["block_shell"] if {' in rego
+        assert "default deny" not in rego
 
     def test_then_hitl_and_then_deny_coexist(self):
         """A single policy file can mix HITL routes and hard denies."""
@@ -330,7 +356,7 @@ class TestCompileYamlFile:
             pytest.skip("Example YAML not found")
 
         rego = compile_yaml(example_path)
-        assert "package kitelogik.custom_rules" in rego
+        assert "package kitelogik.userpolicy" in rego
         assert "block_high_refunds" in rego
         assert "allow_read_ops" in rego
 
@@ -342,7 +368,6 @@ class TestCompileYamlFile:
         yaml_file = tmp_path / "test.yaml"
         yaml_file.write_text("""
 version: 1
-package: kitelogik.generated_test
 rules:
   - name: test_rule
     when:
@@ -355,4 +380,4 @@ rules:
 
         assert output.exists()
         content = output.read_text()
-        assert "package kitelogik.generated_test" in content
+        assert "package kitelogik.userpolicy" in content

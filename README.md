@@ -173,29 +173,45 @@ agent = create_react_agent(llm, tools=tools)
 Write policies in YAML and compile to Rego:
 
 ```yaml
-# policies/custom_rules.yaml
+# policies/my_policy.yaml
 version: 1
-package: kitelogik.custom_rules
 rules:
   - name: block_high_refunds
     when:
       action: approve_refund
-      args.amount: { gt: 1000 }
-    then: deny
+      args:
+        amount:
+          gt: 1000
+    then: deny           # hard-block — the model cannot override it
     reason: "Refunds over $1000 require escalation"
+
+  - name: review_mid_refunds
+    when:
+      action: approve_refund
+      args:
+        amount:
+          gt: 100
+    then: hitl           # route to a human reviewer instead of denying
+    reason: "Refunds over $100 need a second pair of eyes"
 
   - name: allow_read_ops
     when:
-      action: { in: [read_customer, list_transactions] }
-      context.session_scopes: { contains: read_customer }
+      action:
+        - read_customer
+        - list_transactions
+      scope: read_customer
     then: allow
-    risk_tier: INFORMATIONAL
 ```
 
 ```bash
-kitelogik compile policies/custom_rules.yaml   # generates .rego file
+kitelogik compile policies/my_policy.yaml   # generates .rego file
 kitelogik validate                              # check syntax
 ```
+
+Compiled rules land in the `kitelogik.userpolicy` package, which the
+core bundle aggregates alongside the built-in security, delegation, and
+HITL policies — `then: deny` hard-blocks, `then: hitl` escalates to a
+human, `then: allow` grants. You never write or name a Rego package.
 
 ### Option B: Rego (full control)
 

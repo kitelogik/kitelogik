@@ -5,12 +5,6 @@ import future.keywords.in
 
 default allow := false
 
-# `deny` and `hitl` are intentionally partial sets (no boolean default)
-# so YAML-compiled rules (which emit `deny[reason] if {...}` and
-# `hitl[reason] if {...}`) can extend them and so main.rego can
-# count membership without a type-error against `false`. With no rules
-# matching, both are empty sets, which propagates correctly.
-
 # Allow read-only customer and transaction lookups
 allow if {
 	input.action in {"read_customer_record", "list_transactions"}

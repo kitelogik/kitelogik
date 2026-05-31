@@ -487,3 +487,98 @@ test_security_critical_overrides_transactional_tier if {
 		},
 	}
 }
+
+# ── userpolicy aggregation (compiled YAML → kitelogik.userpolicy) ──────────
+# userpolicy is mocked via `with` so these tests don't depend on a compiled
+# policy file being present. They prove main.rego aggregates a user's
+# compiled YAML the way the gate expects.
+
+_clean_input := {
+	"action": "read_customer_record",
+	"resource_path": null,
+	"args": {"session_id": null},
+	"context": {
+		"session_scopes": ["read_customer"],
+		"user_role": "support_agent",
+		"session_id": "s1",
+		"sandbox_verified": false,
+		"delegation_depth": 0,
+	},
+}
+
+test_userpolicy_then_deny_hard_denies if {
+	# `then: deny` in YAML must hard-block.
+	main.deny with input as _clean_input
+		with data.kitelogik.userpolicy as {"allow": false, "deny": {"blocked by user policy"}}
+}
+
+test_userpolicy_then_deny_does_not_route_to_hitl if {
+	# The core fix: a `then: deny` is a hard deny, NOT a soft-deny → HITL.
+	# Before this fix the soft-deny fallback caught it and escalated to a
+	# human, so a deny that nobody approved would time through.
+	not main.requires_hitl with input as _clean_input
+		with data.kitelogik.userpolicy as {"allow": false, "deny": {"blocked by user policy"}}
+}
+
+test_userpolicy_then_hitl_routes_to_review if {
+	# `then: hitl` escalates without hard-denying.
+	main.requires_hitl with input as _clean_input
+		with data.kitelogik.userpolicy as {"allow": false, "hitl": {"needs treasury approval"}}
+}
+
+test_userpolicy_then_hitl_does_not_hard_deny if {
+	not main.deny with input as _clean_input
+		with data.kitelogik.userpolicy as {"allow": false, "hitl": {"needs treasury approval"}}
+}
+
+test_userpolicy_then_allow_grants if {
+	# `then: allow` grants even for an action no core sub-policy covers.
+	main.allow with input as {
+		"action": "generate_report",
+		"resource_path": null,
+		"args": {"session_id": null},
+		"context": {
+			"session_scopes": [],
+			"user_role": "support_agent",
+			"session_id": "s1",
+			"sandbox_verified": false,
+			"delegation_depth": 0,
+		},
+	}
+		with data.kitelogik.userpolicy as {"allow": true}
+}
+
+test_userpolicy_deny_overrides_its_own_allow if {
+	# A user policy that both allows and denies the same event must deny —
+	# deny precedence holds for userpolicy just like the core sub-policies.
+	main.deny with input as _clean_input
+		with data.kitelogik.userpolicy as {"allow": true, "deny": {"blocked"}}
+}
+
+test_userpolicy_deny_blocks_allow if {
+	not main.allow with input as _clean_input
+		with data.kitelogik.userpolicy as {"allow": true, "deny": {"blocked"}}
+}
+
+test_userpolicy_deny_on_high_value_does_not_require_hitl if {
+	# A high-value refund the user policy hard-denies must stay a pure
+	# deny — the TRANSACTIONAL_HIGH HITL rule must not also fire, or the
+	# decision is both "blocked" and "awaiting approval" at once.
+	high_value_refund := {
+		"action": "approve_refund",
+		"resource_path": null,
+		"args": {"amount": 500, "session_id": null},
+		"context": {
+			"session_scopes": ["approve_refund_under_1000"],
+			"user_role": "manager",
+			"session_id": "s1",
+			"sandbox_verified": false,
+			"delegation_depth": 0,
+		},
+	}
+
+	main.deny with input as high_value_refund
+		with data.kitelogik.userpolicy as {"allow": false, "deny": {"over policy cap"}}
+	not main.requires_hitl with input as high_value_refund
+		with data.kitelogik.userpolicy as {"allow": false, "deny": {"over policy cap"}}
+}

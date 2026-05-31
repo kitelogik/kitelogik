@@ -42,6 +42,11 @@ _ARG_OPS = {
     "eq": "==",
 }
 
+# Every compiled policy lands here. main.rego aggregates this package's
+# allow / deny / hitl; the hand-written userpolicy.rego stub owns the
+# defaults so compiled output can stay merge-safe (defaults-free).
+USERPOLICY_PACKAGE = "kitelogik.userpolicy"
+
 
 def compile_yaml(path: str | Path) -> str:
     """Compile a YAML policy file into Rego source.
@@ -99,44 +104,23 @@ def compile_yaml_string(source: str) -> str:
 
 
 def _render_rego(policy: PolicyFile) -> str:
-    """Render a validated PolicyFile into Rego source."""
+    """Render a validated PolicyFile into Rego source.
+
+    Output is merge-safe: it targets the shared ``kitelogik.userpolicy``
+    package and declares no ``default`` values, so any number of compiled
+    files union cleanly with each other and with the hand-written
+    ``userpolicy.rego`` stub (which owns the defaults). ``allow`` is
+    incremental; ``deny`` and ``hitl`` are always set-valued so they
+    never collide with a boolean default in another file.
+    """
     lines: list[str] = []
 
-    # Header
-    lines.append(f"package {policy.package}")
+    lines.append(f"package {USERPOLICY_PACKAGE}")
     lines.append("")
     lines.append("import future.keywords.if")
     lines.append("import future.keywords.in")
     lines.append("")
 
-    # Separate allow / deny / hitl rules
-    allow_rules = [r for r in policy.rules if r.then == "allow"]
-    deny_rules = [r for r in policy.rules if r.then == "deny"]
-    hitl_rules = [r for r in policy.rules if r.then == "hitl"]
-
-    # Default values
-    if allow_rules:
-        lines.append("default allow := false")
-        lines.append("")
-    # Only emit boolean default for deny when there are deny rules
-    # without a reason (boolean-valued `deny if {}`). Deny rules with
-    # a reason compile to set-valued `deny[msg] if {}` which defaults
-    # to an empty set automatically and conflicts with a boolean default.
-    boolean_deny_rules = [r for r in deny_rules if not r.reason]
-    if boolean_deny_rules:
-        lines.append("default deny := false")
-        lines.append("")
-    # HITL rules always have a reason — they compile to set-valued
-    # `hitl[msg] if {}` and default to an empty set automatically.
-    # No `default hitl := false` declaration to avoid the same
-    # conflict described above for deny.
-    if hitl_rules and any(not r.reason for r in hitl_rules):
-        lines.append("default hitl := false")
-        lines.append("")
-    lines.append('default risk_tier := "OPERATIONAL"')
-    lines.append("")
-
-    # Render each rule
     for rule in policy.rules:
         lines.extend(_render_rule(rule))
         lines.append("")
@@ -154,17 +138,13 @@ def _render_rule(rule: Rule) -> list[str]:
         comment += f": {rule.reason}"
     lines.append(comment)
 
-    # Rule head
-    if rule.then == "deny":
-        if rule.reason:
-            lines.append(f'deny["{rule.reason}"] if {{')
-        else:
-            lines.append("deny if {")
-    elif rule.then == "hitl":
-        if rule.reason:
-            lines.append(f'hitl["{rule.reason}"] if {{')
-        else:
-            lines.append("hitl if {")
+    # deny and hitl are always set-valued — the key is the reason when
+    # present, else the rule name. Set-valued rules union across files
+    # and never conflict with a boolean default, which is what keeps
+    # multiple compiled policies (and the stub) mergeable.
+    if rule.then in ("deny", "hitl"):
+        key = rule.reason if rule.reason else rule.name
+        lines.append(f'{rule.then}["{key}"] if {{')
     else:
         lines.append("allow if {")
 
@@ -173,9 +153,12 @@ def _render_rule(rule: Rule) -> list[str]:
     for bl in body_lines:
         lines.append(f"\t{bl}")
 
-    # Risk tier assignment as a separate rule if specified
     lines.append("}")
 
+    # Risk tier assignment as a separate rule if specified. Emitted into
+    # the userpolicy package but not yet aggregated by main.rego, so a
+    # YAML-set risk_tier is currently inert — kept for forward
+    # compatibility until risk-tier precedence is wired through.
     if rule.risk_tier:
         lines.append("")
         lines.append(f"# risk tier for {rule.name}")

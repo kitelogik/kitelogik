@@ -62,8 +62,12 @@ class Rule(BaseModel):
 
 
 class PolicyFile(BaseModel):
-    """Top-level schema for a YAML policy file."""
+    """Top-level schema for a YAML policy file.
+
+    Compiled rules always land in the ``kitelogik.userpolicy`` Rego
+    package — the package the gate aggregates. There is no per-file
+    package field: the author writes rules, not Rego plumbing.
+    """
 
     version: int = 1
-    package: str = Field(..., pattern=r"^[a-z][a-z0-9_.]*$")
     rules: list[Rule] = Field(..., min_length=1)

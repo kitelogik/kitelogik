@@ -1,5 +1,4 @@
 version: 1
-package: kitelogik.custom_rules
 
 rules:
   - name: block_high_refunds

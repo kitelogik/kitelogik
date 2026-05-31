@@ -2,8 +2,10 @@
 """Templates for ``kitelogik init`` scaffolding."""
 
 POLICY_YAML = """\
+# Your governance rules. Compiled to Rego (kitelogik.userpolicy) by
+# `kitelogik init` and `kitelogik compile`, then aggregated by the core
+# bundle alongside the built-in security, delegation, and HITL policies.
 version: 1
-package: kitelogik.main
 
 rules:
   - name: allow_read_ops
@@ -13,7 +15,6 @@ rules:
         - list_transactions
       scope: read_customer
     then: allow
-    risk_tier: INFORMATIONAL
 
   - name: allow_small_refund
     when:
@@ -26,7 +27,6 @@ rules:
         amount:
           lte: 200
     then: allow
-    risk_tier: TRANSACTIONAL_LOW
 
   - name: block_large_refund
     when:

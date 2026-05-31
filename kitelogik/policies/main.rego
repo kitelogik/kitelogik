@@ -7,6 +7,7 @@ import data.kitelogik.data_classification
 import data.kitelogik.delegation
 import data.kitelogik.financial
 import data.kitelogik.security
+import data.kitelogik.userpolicy
 import future.keywords.if
 import future.keywords.in
 
@@ -34,20 +35,25 @@ allow if {
 	financial.allow
 }
 
-# Propagate financial-package hard denies. The YAML compiler emits
-# set-valued `deny[reason] if {...}` rules for `then: deny`. Iterating
-# membership avoids type errors when the package's `deny` happens to be
-# boolean-defaulted in some hand-written rego.
-deny if {
-	some msg
-	financial.deny[msg]
+# Allow if the compiled user policy (kitelogik.userpolicy) grants access
+allow if {
+	not deny
+	userpolicy.allow
 }
 
-# Propagate financial-package HITL routes (`then: hitl` in YAML). Routes
-# the action to human review without hard-denying it.
+# Propagate user-policy hard denies (`then: deny` in YAML). The compiler
+# emits set-valued `deny[reason] if {...}`; iterating membership keeps
+# this type-safe whether or not the set has members.
+deny if {
+	some msg
+	userpolicy.deny[msg]
+}
+
+# Propagate user-policy HITL routes (`then: hitl` in YAML). Routes the
+# action to human review without hard-denying it.
 requires_hitl if {
 	some msg
-	financial.hitl[msg]
+	userpolicy.hitl[msg]
 }
 
 # --- Agent lifecycle event routing ---
@@ -137,14 +143,27 @@ risk_tier := "INFORMATIONAL" if {
 
 # --- HITL escalation rules ---
 
-# High-value transactions always require human approval
+# High-value transactions require human approval — unless the action is
+# already denied, in which case the deny stands and there is nothing for
+# a human to approve. Keeps deny and requires_hitl from both being true.
 requires_hitl if {
+	not deny
 	risk_tier == "TRANSACTIONAL_HIGH"
 }
 
-# Denied (but non-security-critical, non-delegation) actions surface to human review
+# Soft-deny fallback: actions that are neither allowed nor explicitly
+# hard-denied surface to human review, so policy gaps fail safe rather
+# than silently deny. An explicit user-policy `then: deny` is a hard
+# deny, not a gap, so it is excluded here — alongside the security and
+# delegation hard denies — and stays a pure deny with no HITL route.
 requires_hitl if {
 	not allow
 	not security.deny
 	not delegation.deny
+	not _userpolicy_hard_deny
+}
+
+_userpolicy_hard_deny if {
+	some msg
+	userpolicy.deny[msg]
 }

@@ -21,6 +21,29 @@ from importlib.metadata import version as pkg_version
 from pathlib import Path
 
 
+def _copy_core_bundle(dest: Path) -> list[str]:
+    """Copy the installed core OSS Rego modules into ``dest``.
+
+    Copies every top-level non-test ``.rego`` module shipped with the
+    package (main, userpolicy, financial, security, delegation, agent_*)
+    so a scaffolded project evaluates against the real governance
+    pipeline — security hard-denies, delegation limits, HITL routing,
+    event dispatch — not just the user's compiled rules. The user's
+    YAML compiles to a separate ``policy.rego`` in the same package.
+    Returns the copied file names.
+    """
+    import shutil
+
+    src = Path(__file__).parent / "policies"
+    copied: list[str] = []
+    for rego in sorted(src.glob("*.rego")):
+        if rego.name.endswith("_test.rego"):
+            continue
+        shutil.copy2(rego, dest / rego.name)
+        copied.append(rego.name)
+    return copied
+
+
 def _find_policies_dir() -> Path:
     """Find the policies directory, searching upward from cwd."""
     cwd = Path.cwd()
@@ -129,6 +152,11 @@ def cmd_init(args: argparse.Namespace) -> int:
     (target / "docker-compose.yml").write_text(DOCKER_COMPOSE_YAML)
     (target / ".env.example").write_text(ENV_EXAMPLE)
 
+    # Ship the core governance bundle so the project evaluates against the
+    # real pipeline, not just the user's rules. The user's YAML compiles
+    # into the same kitelogik.userpolicy package the bundle aggregates.
+    core_modules = _copy_core_bundle(policies_dir)
+
     # Auto-compile the YAML policy to Rego
     from kitelogik.policies.compiler import compile_yaml
 
@@ -138,7 +166,8 @@ def cmd_init(args: argparse.Namespace) -> int:
     print(f"Initialized Kite Logik project in {target}\n")
     print("  Created:")
     print("    policies/policy.yaml     — governance rules (YAML)")
-    print("    policies/policy.rego     — compiled Rego policy")
+    print("    policies/policy.rego     — your compiled rules (kitelogik.userpolicy)")
+    print(f"    policies/*.rego          — core governance bundle ({len(core_modules)} modules)")
     print("    agent.py                 — example governed agent")
     print("    docker-compose.yml       — OPA policy engine")
     print("    .env.example             — environment template")

@@ -16,6 +16,34 @@ Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   underlying `PolicyDecision` names a specific Rego rule, so a developer
   sees which rule fired without unpacking `exc.decision`. The message is
   unchanged when `rule_matched` is `None`.
+- `kitelogik init` now scaffolds the full core governance bundle (main,
+  userpolicy, financial, security, delegation, and the agent_* modules)
+  into the project's `policies/`, so a new project evaluates against the
+  real pipeline — security hard-denies, delegation limits, HITL routing,
+  event dispatch — not just the user's compiled rules. Previously the
+  compiled policy stood in for `main` and the project had none of the
+  built-in protections.
+
+### Removed
+- The YAML policy `package:` field. Compiled policies now always target
+  the `kitelogik.userpolicy` package (see Fixed). Existing YAML files
+  that still set `package:` keep compiling — the field is ignored, not
+  an error.
+
+### Fixed
+- Compiled YAML policies are now actually enforced. A compiled policy
+  previously landed in whatever package the YAML named — either one the
+  gate never queries (`kitelogik.custom_rules`, so the rules governed
+  nothing) or one that collides with a core module (`kitelogik.main` /
+  `kitelogik.financial`, an OPA bundle compile error). Compiled output
+  now targets `kitelogik.userpolicy`, which `main.rego` aggregates
+  alongside the other sub-policies, with merge-safe Rego (no `default`
+  declarations; `deny`/`hitl` always set-valued).
+- A YAML `then: deny` now hard-blocks instead of being routed to human
+  review. `main.rego`'s soft-deny → HITL fallback no longer catches an
+  explicit user-policy deny, and a high-value transaction that is denied
+  no longer also sets `requires_hitl` — a denied action stays a pure
+  deny rather than surfacing as both blocked and awaiting approval.
 
 ### Documentation
 - `SECURITY.md` adds a Deployment Hardening section flagging that the

@@ -419,7 +419,6 @@ class TestYAMLCompileE2E:
     def test_compile_and_verify_deny_rule(self):
         yaml_src = """
 version: 1
-package: kitelogik.custom
 rules:
   - name: block_high_refunds
     when:
@@ -432,7 +431,8 @@ rules:
 """
         rego = compile_yaml_string(yaml_src)
 
-        assert "package kitelogik.custom" in rego
+        # Compiled policies always target the shared userpolicy package.
+        assert "package kitelogik.userpolicy" in rego
         assert "default deny := false" not in rego  # set-valued deny[msg]
         assert 'input.action == "approve_refund"' in rego
         assert "input.args.amount > 1000" in rego
@@ -441,7 +441,6 @@ rules:
     def test_compile_allow_rule_with_scope_check(self):
         yaml_src = """
 version: 1
-package: kitelogik.custom
 rules:
   - name: allow_read
     when:
@@ -454,7 +453,8 @@ rules:
 """
         rego = compile_yaml_string(yaml_src)
 
-        assert "default allow := false" in rego
+        # Merge-safe output: no defaults (the userpolicy.rego stub owns them).
+        assert "default allow" not in rego
         assert "allow if {" in rego
         assert '"read_customer", "list_transactions"' in rego
         assert '"read_customer" in input.context.session_scopes' in rego
@@ -463,7 +463,6 @@ rules:
     def test_compile_multi_rule_policy(self):
         yaml_src = """
 version: 1
-package: kitelogik.multi
 rules:
   - name: block_dangerous
     when:
@@ -478,7 +477,7 @@ rules:
         rego = compile_yaml_string(yaml_src)
 
         assert "default deny := false" not in rego  # set-valued deny[msg]
-        assert "default allow := false" in rego
+        assert "default allow" not in rego
         assert 'input.action == "execute_shell"' in rego
         assert 'input.action == "read_file"' in rego
 

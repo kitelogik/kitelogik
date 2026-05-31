@@ -35,10 +35,23 @@ class TestKitelogikInit:
 
     def test_compiled_rego_is_valid(self, init_project):
         rego = (init_project / "policies" / "policy.rego").read_text()
-        assert "package kitelogik.main" in rego
+        # The user's rules compile into the shared userpolicy package,
+        # merge-safe: no defaults (the bundled userpolicy.rego owns them).
+        assert "package kitelogik.userpolicy" in rego
         assert "default deny := false" not in rego  # set-valued deny[msg]
-        assert "default allow := false" in rego
-        assert 'default risk_tier := "OPERATIONAL"' in rego
+        assert "default allow" not in rego
+        assert "default risk_tier" not in rego
+        assert 'deny["Refunds over $200 require manager approval"]' in rego
+
+    def test_init_ships_core_bundle(self, init_project):
+        # The scaffold must include the full governance pipeline, not just
+        # the user's compiled rules, so the project evaluates against the
+        # real main package (security, delegation, HITL, event routing).
+        policies = init_project / "policies"
+        for module in ("main.rego", "userpolicy.rego", "financial.rego", "security.rego"):
+            assert (policies / module).exists(), f"missing core module {module}"
+        # Core test files are KL's own CI artefacts — not shipped to users.
+        assert not list(policies.glob("*_test.rego"))
 
 
 class TestExamplePolicyEvaluation:
