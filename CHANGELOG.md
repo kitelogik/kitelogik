@@ -6,6 +6,14 @@ Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- `ADAPTER_MATURITY` registry in `kitelogik.adapters` — the source of
+  truth for each of the 11 framework adapters' maturity tier (`stable` /
+  `beta` / `experimental`). A guard test fails if an adapter module ships
+  without a tier. The 7 core adapters (OpenAI, OpenAI Agents, LangChain,
+  LangGraph, CrewAI, Google ADK, PydanticAI) are `stable`; the newer
+  LlamaIndex / Semantic Kernel / Haystack / Dify are `beta`.
+
 ### Changed
 - `OPAConnectionError` messages now include a recovery hint (the
   `docker compose up -d opa` command and the OPAClient base_url override)
@@ -46,6 +54,8 @@ Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   deny rather than surfacing as both blocked and awaiting approval.
 
 ### Documentation
+- README lists the framework adapters as a table with per-adapter
+  maturity tiers, sourced from `ADAPTER_MATURITY`.
 - `SECURITY.md` adds a Deployment Hardening section flagging that the
   bundled `docker-compose.yml` binds OPA to `0.0.0.0:8181` for local
   convenience and the OPA REST API ships without authentication, with

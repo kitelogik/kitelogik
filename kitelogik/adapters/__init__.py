@@ -20,3 +20,29 @@ every call through the Kite Logik policy gate before execution.
 Note: Framework-specific adapters require their respective packages to be
 installed. They are lazy-imported at call time.
 """
+
+# Adapter maturity — the single source of truth for which framework adapters
+# ship and how battle-tested each one is. Tiers:
+#
+#   stable — has a dedicated test suite and has been exercised through real
+#            integration fixes; wire it into production with confidence.
+#   beta   — governance flow is tested in CI, but real-framework integration
+#            is less proven (some framework-native tests require the framework
+#            installed and are skipped in the default test run).
+#   experimental — early, minimal coverage. (None currently.)
+#
+# The governance pipeline is identical across every tier — the tier reflects
+# integration maturity with the framework, not the strength of enforcement.
+ADAPTER_MATURITY: dict[str, str] = {
+    "openai": "stable",
+    "openai_agents": "stable",
+    "langchain": "stable",
+    "langgraph": "stable",
+    "crewai": "stable",
+    "google_adk": "stable",
+    "pydantic_ai": "stable",
+    "llamaindex": "beta",
+    "semantic_kernel": "beta",
+    "haystack": "beta",
+    "dify": "beta",
+}
