@@ -37,6 +37,12 @@ Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the `kitelogik.userpolicy` package (see Fixed). Existing YAML files
   that still set `package:` keep compiling — the field is ignored, not
   an error.
+- `edition`, `Edition`, and `load_plugin` are no longer re-exported from
+  the top-level `kitelogik` package. They were an enterprise-detection /
+  plugin-discovery surface (`edition()` returns `"ENTERPRISE"` when a
+  plugin is registered) that did not belong on the OSS public API. The
+  `kitelogik.edition` module is unchanged and still importable directly
+  for any extension package that needs it.
 
 ### Fixed
 - Compiled YAML policies are now actually enforced. A compiled policy

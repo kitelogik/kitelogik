@@ -38,7 +38,6 @@ from kitelogik.agents.session import AgentSession, SessionResult
 from kitelogik.anchor.credentials import CredentialBroker
 from kitelogik.anchor.queue import HITLQueue
 from kitelogik.audit.store import AuditStore
-from kitelogik.edition import Edition, edition, load_plugin
 from kitelogik.governed import GovernanceError, GovernedToolbox, governed
 from kitelogik.memory.models import TrustTier
 from kitelogik.memory.store import MemoryStore
@@ -94,8 +93,4 @@ __all__ = [
     # Policy compilation
     "compile_yaml",
     "compile_yaml_string",
-    # Edition
-    "Edition",
-    "edition",
-    "load_plugin",
 ]
