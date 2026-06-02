@@ -30,12 +30,21 @@ pip install -e ".[dev]"
 | [`03_openai_tools.py`](03_openai_tools.py) | `OpenAIAdapter` executing model-generated tool calls through the gate | `openai` (stubbed in the script) |
 | [`04_langchain_agent.py`](04_langchain_agent.py) | `govern_toolkit` wrapping existing LangChain `BaseTool` objects | `langchain-core` |
 | [`05_hitl_escalation.py`](05_hitl_escalation.py) | Soft-deny → `HITLQueue` enqueue → human approve → audit trail | — |
+| [`06_credential_delegation.py`](06_credential_delegation.py) | `CredentialBroker` subset-only delegation + revocation | — |
 
 Run any example directly:
 
 ```bash
 python examples/01_decorator.py
 ```
+
+## Adversarial demos
+
+[`adversarial/`](adversarial/) — four lifecycle attacks (delegation scope
+escalation, dangerous plan step, budget exhaustion, memory poisoning) and
+how the governance layer stops each. These target what an agent *does*,
+not what it says — the gap prompt-injection firewalls and output
+validators structurally miss. See [`adversarial/README.md`](adversarial/README.md).
 
 ## Where to look next
 

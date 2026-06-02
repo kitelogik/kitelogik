@@ -7,6 +7,13 @@ Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- Adversarial lifecycle demos in `examples/adversarial/` — four runnable
+  scripts showing attacks on the agent lifecycle that prompt/output
+  guardrails miss: delegation scope escalation (`agent.delegate`), a
+  destructive step buried in a plan (`agent.plan`), budget-exhausting
+  runaway (`agent.budget`), and memory poisoning / MINJA (memory
+  provenance). Each prints the outcome and asserts it; a README maps the
+  attack taxonomy to the governance event that catches each.
 - Industry starter templates in `kitelogik/policy_templates/` —
   ready-to-edit `policy.yaml` files for financial refunds, healthcare
   PHI access, and code-execution restrictions. Each is a complete policy
