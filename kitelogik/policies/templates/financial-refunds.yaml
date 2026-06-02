@@ -1,0 +1,61 @@
+# Starter template — Financial refunds
+#
+# Threat model: an agent that can issue customer refunds. Without
+# governance, a compromised or mistaken agent can approve an unbounded
+# refund, pay a sanctioned destination, or act without the right role.
+#
+# This policy tiers refunds by amount, routes the grey zone to a human,
+# hard-blocks large refunds and sanctioned destinations, and only lets
+# the small-refund path run for staff who hold the process_refunds scope.
+#
+# Use it: drop this in as your policies/policy.yaml (kitelogik init
+# scaffolds one), then `kitelogik compile policies/policy.yaml`. Tune the
+# amount thresholds, roles, and sanctioned list to your business.
+version: 1
+
+rules:
+  - name: allow_small_refunds
+    when:
+      action: approve_refund
+      role:
+        - support_agent
+        - refund_specialist
+        - manager
+      scope: process_refunds
+      args:
+        amount:
+          gte: 0
+          lte: 50
+    then: allow
+
+  - name: review_mid_refunds
+    when:
+      action: approve_refund
+      args:
+        amount:
+          gt: 50
+          lte: 500
+    then: hitl
+    reason: "Refunds between 50 and 500 require a human reviewer"
+
+  - name: block_large_refunds
+    when:
+      action: approve_refund
+      args:
+        amount:
+          gt: 500
+    then: deny
+    reason: "Refunds over 500 go through the finance team, not an agent"
+
+  - name: block_sanctioned_destination
+    when:
+      action: approve_refund
+      args:
+        destination_country:
+          in:
+            - IR
+            - KP
+            - SY
+            - RU
+    then: deny
+    reason: "Refund destination is a sanctioned jurisdiction"

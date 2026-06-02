@@ -23,7 +23,7 @@ Fixes #
 - [ ] Tests added or updated (all new code paths covered)
 - [ ] `pytest -q --ignore=tests/integration --ignore=tests/adversarial` passes locally
 - [ ] `ruff check . && ruff format --check .` passes with no errors
-- [ ] If Rego was changed: `opa test kitelogik/policies/ -v` passes and policy test updated
+- [ ] If Rego was changed: `opa test kitelogik/policies/ -v --ignore='*.yaml' --ignore='*.yml'` passes and policy test updated
 - [ ] If a new policy rule was added: default-deny case covered by OPA test
 - [ ] `CHANGELOG.md` updated under `[Unreleased]`
 - [ ] No secrets, credentials, or API keys in diff

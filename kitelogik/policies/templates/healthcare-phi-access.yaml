@@ -1,0 +1,55 @@
+# Starter template — Healthcare PHI access
+#
+# Threat model: a clinical co-pilot agent that can read patient data and
+# propose changes to the electronic health record (EHR). The risks are
+# unauthorised access to protected health information (PHI), changes to
+# the record without a registered clinician's sign-off, and queries that
+# touch special-category data (EU AI Act / GDPR Art. 9 — health, genetic,
+# ethnicity, religion, sexual orientation).
+#
+# This policy lets registered clinicians read records, routes every
+# proposed record change to a human for sign-off, and hard-blocks
+# special-category queries outright.
+#
+# Use it: drop this in as your policies/policy.yaml, then
+# `kitelogik compile policies/policy.yaml`. Tune the roles, actions, and
+# special-category fields to your jurisdiction and EHR schema.
+version: 1
+
+rules:
+  - name: allow_clinician_read
+    when:
+      action:
+        - list_my_patients
+        - get_patient_summary
+        - get_medication_list
+      role:
+        - clinician
+        - attending_physician
+        - nurse
+      scope: read_patient_record
+    then: allow
+
+  - name: review_record_change
+    when:
+      action:
+        - propose_diagnosis
+        - propose_icd10_code
+        - draft_discharge_letter
+        - update_medication
+    then: hitl
+    reason: "Record changes need sign-off from a registered clinician"
+
+  - name: block_special_category_query
+    when:
+      action: query_population
+      args:
+        filter_field:
+          in:
+            - hiv_status
+            - genetic_marker
+            - religion
+            - ethnicity
+            - sexual_orientation
+    then: deny
+    reason: "Special-category data (GDPR Art. 9 / EU AI Act) is off-limits"

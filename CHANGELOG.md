@@ -7,6 +7,14 @@ Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- Industry starter templates in `kitelogik/policies/templates/` —
+  ready-to-edit `policy.yaml` files for financial refunds, healthcare
+  PHI access, and code-execution restrictions. Each is a complete policy
+  a user drops in as their `policies/policy.yaml` and compiles; they
+  encode a domain threat model (tiered refunds + sanctioned-destination
+  block; clinician-gated PHI with sign-off on record changes and a hard
+  block on special-category queries; shell/eval/egress blocks with a
+  workspace-confined write rule). Covered by `tests/test_policy_templates.py`.
 - `ADAPTER_MATURITY` registry in `kitelogik.adapters` — the source of
   truth for each of the 11 framework adapters' maturity tier (`stable` /
   `beta` / `experimental`). A guard test fails if an adapter module ships

@@ -91,7 +91,9 @@ jobs:
         with:
           version: latest
       - name: Run OPA unit tests
-        run: opa test kitelogik/policies/ -v
+        # Ignore authoring YAML (templates/, examples/) — OPA would load it
+        # as data documents and the policy templates merge-conflict.
+        run: opa test kitelogik/policies/ -v --ignore='*.yaml' --ignore='*.yml'
       - name: Check policy formatting
         run: opa fmt --fail --diff kitelogik/policies/
 

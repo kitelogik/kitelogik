@@ -1,0 +1,66 @@
+# Starter template — Code-execution restrictions
+#
+# Threat model: a developer-tools agent that can run code and touch the
+# filesystem. The risks are arbitrary shell / eval access (full host
+# compromise), unrestricted network egress (data exfiltration), and file
+# writes outside a contained workspace.
+#
+# This policy hard-blocks shell and eval, blocks raw network egress,
+# allows code execution only for callers holding the sandboxed_execution
+# scope, and confines file writes to /workspace/. Anything this policy
+# does not explicitly allow falls through to human review by default
+# (the soft-deny fallback in main.rego), so gaps fail safe.
+#
+# Note: a true sandbox boundary (proving the process is network-isolated)
+# is enforced in Rego via the security policy's sandbox_verified flag,
+# which the YAML frontend cannot yet express. Treat the scope check below
+# as a coarse gate and pair it with the security module for real
+# isolation.
+#
+# Use it: drop this in as your policies/policy.yaml, then
+# `kitelogik compile policies/policy.yaml`. Tune the action lists, the
+# required scope, and the workspace path to your environment.
+version: 1
+
+rules:
+  - name: block_shell_and_eval
+    when:
+      action:
+        - run_shell_command
+        - execute_shell
+        - eval_code
+        - spawn_process
+    then: deny
+    reason: "Direct shell and eval access is never permitted for agents"
+
+  - name: block_network_egress
+    when:
+      action:
+        - http_request
+        - open_socket
+        - send_email
+    then: deny
+    reason: "Raw network egress is blocked; use an allowlisted tool"
+
+  - name: allow_sandboxed_execution
+    when:
+      action: execute_code
+      scope: sandboxed_execution
+    then: allow
+
+  - name: allow_workspace_writes
+    when:
+      action: write_file
+      args:
+        path:
+          contains: "/workspace/"
+    then: allow
+
+  - name: block_writes_outside_workspace
+    when:
+      action: write_file
+      args:
+        path:
+          not_contains: "/workspace/"
+    then: deny
+    reason: "File writes are restricted to /workspace/"
