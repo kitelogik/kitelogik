@@ -28,7 +28,7 @@ Ready-to-use OPA/Rego policies for common governance patterns. Copy any policy t
 
 4. Run OPA tests to verify:
    ```bash
-   opa test kitelogik/policies/ -v --ignore='*.yaml' --ignore='*.yml'
+   opa test kitelogik/policies/ -v
    ```
 
 ## Writing Your Own

@@ -1,9 +1,9 @@
 # Industry Starter Templates
 
 Domain-shaped YAML policies to start from instead of a blank page. Unlike
-the Rego modules in [`../library/`](../library/) (which you copy and
-`import` into `main.rego`), a template is a complete **`policy.yaml`** —
-drop it in and compile.
+the Rego modules in [`../policies/library/`](../policies/library/) (which
+you copy and `import` into `main.rego`), a template is a complete
+**`policy.yaml`** — drop it in and compile.
 
 | Template | File | What it governs |
 |---|---|---|
@@ -15,7 +15,7 @@ drop it in and compile.
 
 ```bash
 kitelogik init my-agent
-cp $(python -c "import kitelogik.policies as p, os; print(os.path.dirname(p.__file__))")/templates/financial-refunds.yaml \
+cp "$(python -c 'import kitelogik, os; print(os.path.dirname(kitelogik.__file__))')/policy_templates/financial-refunds.yaml" \
    my-agent/policies/policy.yaml
 cd my-agent
 kitelogik compile policies/policy.yaml      # → policies/policy.rego

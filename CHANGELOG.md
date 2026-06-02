@@ -7,7 +7,7 @@ Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
-- Industry starter templates in `kitelogik/policies/templates/` —
+- Industry starter templates in `kitelogik/policy_templates/` —
   ready-to-edit `policy.yaml` files for financial refunds, healthcare
   PHI access, and code-execution restrictions. Each is a complete policy
   a user drops in as their `policies/policy.yaml` and compiles; they

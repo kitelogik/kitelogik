@@ -219,7 +219,7 @@ HITL policies — `then: deny` hard-blocks, `then: hitl` escalates to a
 human, `then: allow` grants. You never write or name a Rego package.
 
 **Start from a domain template** instead of a blank page —
-[`kitelogik/policies/templates/`](https://github.com/kitelogik/kitelogik/tree/main/kitelogik/policies/templates)
+[`kitelogik/policy_templates/`](https://github.com/kitelogik/kitelogik/tree/main/kitelogik/policy_templates)
 ships ready-to-edit `policy.yaml` files for financial refunds, healthcare
 PHI access, and code-execution restrictions. Drop one in as your
 `policies/policy.yaml` and compile.

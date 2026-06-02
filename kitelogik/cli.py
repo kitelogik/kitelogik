@@ -225,10 +225,8 @@ def cmd_test(args: argparse.Namespace) -> int:
     verbose_flag = ["-v"] if args.verbose else []
     try:
         # Stream output directly for `opa test` so the user sees progress.
-        # Ignore authoring YAML (policy.yaml, templates/) — OPA would load
-        # it as data documents rather than as policy under test.
         result = _run_opa(
-            ["test", str(policies_dir), *verbose_flag, "--ignore=*.yaml", "--ignore=*.yml"],
+            ["test", str(policies_dir), *verbose_flag],
             policies_dir=policies_dir,
             capture_output=False,
         )

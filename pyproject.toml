@@ -73,7 +73,14 @@ include = ["kitelogik*"]
 exclude = ["tests*", ".venv*", "examples*", "benchmarks*", "dev*"]
 
 [tool.setuptools.package-data]
-kitelogik = ["py.typed", "policies/**/*.rego", "policies/**/*.yaml", "policies/**/*.yml"]
+kitelogik = [
+    "py.typed",
+    "policies/**/*.rego",
+    "policies/**/*.yaml",
+    "policies/**/*.yml",
+    "policy_templates/*.yaml",
+    "policy_templates/*.md",
+]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

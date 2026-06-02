@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Tests for the industry starter templates in kitelogik/policies/templates.
+"""Tests for the industry starter templates in kitelogik/policy_templates.
 
 These compile each template and assert the threat-model-critical rules are
 present in the generated Rego. They run without OPA — end-to-end decision
@@ -15,7 +15,7 @@ import pytest
 from kitelogik.policies.compiler import compile_yaml
 from kitelogik.policies.schema import PolicyFile
 
-_TEMPLATES_DIR = Path(__file__).parent.parent / "kitelogik" / "policies" / "templates"
+_TEMPLATES_DIR = Path(__file__).parent.parent / "kitelogik" / "policy_templates"
 _TEMPLATES = sorted(_TEMPLATES_DIR.glob("*.yaml"))
 _IDS = [p.stem for p in _TEMPLATES]
 
