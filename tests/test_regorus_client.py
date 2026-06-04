@@ -54,7 +54,30 @@ class TestResultToDecision:
         assert decision.allow is False
         assert decision.deny is True
         assert decision.risk_tier == RiskTier.SECURITY_CRITICAL
-        assert "Hard blocked" in decision.reason
+        # No deny_reason set → generic fallback (no false "security" claim).
+        assert decision.reason == "Hard blocked by policy"
+
+    def test_deny_reason_set_surfaces_in_reason(self):
+        result = {
+            "allow": False,
+            "deny": True,
+            "deny_reason": {"Plan denied — contains a blocked tool": True},
+            "risk_tier": "SECURITY_CRITICAL",
+            "requires_hitl": False,
+        }
+        decision = result_to_decision(result)
+        assert decision.reason == "Plan denied — contains a blocked tool"
+
+    def test_multiple_deny_reasons_joined_sorted(self):
+        result = {
+            "allow": False,
+            "deny": True,
+            "deny_reason": {"Beta reason": True, "Alpha reason": True},
+            "risk_tier": "SECURITY_CRITICAL",
+            "requires_hitl": False,
+        }
+        decision = result_to_decision(result)
+        assert decision.reason == "Alpha reason; Beta reason"
 
     def test_default_deny_result(self):
         result = {

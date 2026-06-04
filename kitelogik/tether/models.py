@@ -171,18 +171,20 @@ def result_to_decision(result: dict) -> PolicyDecision:
     # JSON objects like {"reason string": true}, and lists as arrays.
     # Normalise to a boolean + reason list for PolicyDecision.
     raw_deny = result.get("deny", False)
-    if isinstance(raw_deny, dict) and raw_deny:
-        is_denied = True
-        deny_reasons = list(raw_deny.keys())
-    elif isinstance(raw_deny, list) and raw_deny:
-        is_denied = True
-        deny_reasons = raw_deny
+    is_denied = bool(raw_deny)
+
+    # Reasons come from main.rego's `deny_reason` set when present; older or
+    # hand-written rego may instead make `deny` itself set-valued. Accept both.
+    raw_reasons = result.get("deny_reason", raw_deny)
+    if isinstance(raw_reasons, dict):
+        deny_reasons = list(raw_reasons.keys())
+    elif isinstance(raw_reasons, list):
+        deny_reasons = list(raw_reasons)
     else:
-        is_denied = bool(raw_deny)
         deny_reasons = []
 
     if is_denied:
-        reason = "; ".join(deny_reasons) if deny_reasons else "Hard blocked by security policy"
+        reason = "; ".join(sorted(deny_reasons)) if deny_reasons else "Hard blocked by policy"
     elif result.get("allow"):
         reason = f"Allowed — risk tier: {result.get('risk_tier', 'OPERATIONAL')}"
     else:

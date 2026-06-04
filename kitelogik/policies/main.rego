@@ -109,6 +109,44 @@ deny if {
 	data_classification.deny
 }
 
+# --- Deny reasons ---
+# Human-readable reasons for a hard deny, surfaced in PolicyDecision.reason.
+# Mirrors the deny rules above so a denied action carries an accurate
+# explanation instead of a generic fallback. A deny with no matching reason
+# here still denies — the Python layer falls back to a generic message.
+
+# User-policy (compiled YAML) carries its own `reason:` strings.
+deny_reason[msg] if {
+	some msg
+	userpolicy.deny[msg]
+}
+
+deny_reason["Hard blocked by security policy"] if {
+	security.deny
+}
+
+deny_reason["Delegation denied — exceeds depth limit or requests a scope the parent does not hold"] if {
+	delegation.deny
+}
+
+deny_reason["Agent lifecycle denied — spawn/delegate exceeds the depth limit or requests an ungranted capability"] if {
+	input.event_type in {"agent.spawn", "agent.delegate"}
+	agent_lifecycle.deny
+}
+
+deny_reason["Plan denied — exceeds the step limit or contains a blocked tool"] if {
+	input.event_type == "agent.plan"
+	agent_plan.deny
+}
+
+deny_reason["Resource budget exhausted"] if {
+	agent_budget.deny
+}
+
+deny_reason["Data classification policy denied this flow"] if {
+	data_classification.deny
+}
+
 # --- Risk tier classification ---
 
 risk_tier := "SECURITY_CRITICAL" if {

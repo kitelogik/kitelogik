@@ -60,6 +60,14 @@ Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   for any extension package that needs it.
 
 ### Fixed
+- Hard-deny decisions now carry an accurate reason. Previously every hard
+  deny surfaced as `PolicyDecision.reason = "Hard blocked by security
+  policy"` — wrong for non-security denies and discarding the `reason:`
+  strings authored in YAML policies, because `main.rego` exposed `deny`
+  as a bare boolean. `main.rego` now also exposes a `deny_reason` set
+  (security, delegation, agent lifecycle, plan, budget, data
+  classification, and user-policy reasons), which `result_to_decision`
+  surfaces; the generic fallback is reworded to "Hard blocked by policy".
 - Compiled YAML policies are now actually enforced. A compiled policy
   previously landed in whatever package the YAML named — either one the
   gate never queries (`kitelogik.custom_rules`, so the rules governed

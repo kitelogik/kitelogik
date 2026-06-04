@@ -582,3 +582,85 @@ test_userpolicy_deny_on_high_value_does_not_require_hitl if {
 	not main.requires_hitl with input as high_value_refund
 		with data.kitelogik.userpolicy as {"allow": false, "deny": {"over policy cap"}}
 }
+
+# ── deny_reason — accurate explanation per deny source ────────────────────
+
+test_deny_reason_security if {
+	main.deny_reason["Hard blocked by security policy"] with input as {
+		"action": "execute_code",
+		"resource_path": null,
+		"args": {"session_id": null},
+		"context": {
+			"session_scopes": [],
+			"user_role": "support_agent",
+			"session_id": "s1",
+			"sandbox_verified": false,
+			"delegation_depth": 0,
+		},
+	}
+}
+
+test_deny_reason_plan_blocked_tool if {
+	main.deny_reason["Plan denied — exceeds the step limit or contains a blocked tool"] with input as {
+		"event_type": "agent.plan",
+		"action": "agent.plan",
+		"args": {},
+		"steps": [{"tool_name": "drop_database"}],
+		"context": {
+			"session_scopes": [],
+			"user_role": "agent",
+			"session_id": "s1",
+			"sandbox_verified": false,
+			"delegation_depth": 0,
+		},
+	}
+}
+
+test_deny_reason_budget if {
+	main.deny_reason["Resource budget exhausted"] with input as {
+		"event_type": "agent.budget",
+		"action": "agent.budget",
+		"args": {},
+		"context": {
+			"session_scopes": [],
+			"user_role": "agent",
+			"session_id": "s1",
+			"sandbox_verified": false,
+			"delegation_depth": 0,
+			"budget_total_tokens": 100,
+			"budget_used_tokens": 100,
+		},
+	}
+}
+
+test_deny_reason_userpolicy_carries_yaml_reason if {
+	main.deny_reason["Refunds over 500 are blocked"] with input as {
+		"action": "approve_refund",
+		"resource_path": null,
+		"args": {"amount": 900, "session_id": null},
+		"context": {
+			"session_scopes": [],
+			"user_role": "agent",
+			"session_id": "s1",
+			"sandbox_verified": false,
+			"delegation_depth": 0,
+		},
+	}
+		with data.kitelogik.userpolicy as {"allow": false, "deny": {"Refunds over 500 are blocked"}}
+}
+
+test_no_deny_reason_when_allowed if {
+	reasons := {r | some r; main.deny_reason[r]} with input as {
+		"action": "read_customer_record",
+		"resource_path": null,
+		"args": {"session_id": null},
+		"context": {
+			"session_scopes": ["read_customer"],
+			"user_role": "support_agent",
+			"session_id": "s1",
+			"sandbox_verified": false,
+			"delegation_depth": 0,
+		},
+	}
+	count(reasons) == 0
+}
