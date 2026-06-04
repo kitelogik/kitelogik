@@ -1,7 +1,7 @@
 # Kite Logik
 
 [![CI](https://github.com/kitelogik/kitelogik/actions/workflows/ci.yml/badge.svg)](https://github.com/kitelogik/kitelogik/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-645%20passing-brightgreen)](https://github.com/kitelogik/kitelogik/actions)
+[![Tests](https://img.shields.io/badge/tests-666%20passing-brightgreen)](https://github.com/kitelogik/kitelogik/actions)
 [![Coverage](https://codecov.io/gh/kitelogik/kitelogik/branch/main/graph/badge.svg)](https://codecov.io/gh/kitelogik/kitelogik)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](https://github.com/kitelogik/kitelogik/blob/main/LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue)](https://www.python.org)
@@ -321,7 +321,7 @@ kitelogik/
   observability/    OpenTelemetry tracing
   mcp/              MCP client with supply chain verification
   policies/         OPA/Rego rules, YAML compiler, starter library, examples
-tests/              645 tests across unit, integration, adversarial, fuzz, benchmark suites
+tests/              666 tests across unit, integration, adversarial, fuzz, benchmark suites
 ```
 
 ## Features
@@ -352,7 +352,7 @@ Everything in this repository is Apache-2.0 and self-hostable. There is no paid 
 python -m venv .venv && .venv/bin/pip install -e ".[dev]"
 docker compose up -d opa    # start OPA policy engine
 
-make test           # 645 tests passing (560 unit + 85 adversarial; integration suite runs separately)
+make test           # 666 tests (570 unit + 85 adversarial + 11 integration; integration needs OPA)
 make lint           # ruff check + format
 
 # Policy management

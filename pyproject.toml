@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kitelogik"
-version = "0.3.0"
+version = "0.4.0"
 description = "Governance middleware for AI agents — policy enforcement, credential lifecycle, audit trail."
 readme = "README.md"
 requires-python = ">=3.11"
