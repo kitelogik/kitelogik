@@ -6,6 +6,12 @@ Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- `kitelogik compile --check` no longer prints "Would generate Rego for
+  package defined in <file>" — a leftover from before the YAML `package:`
+  field was removed. It now reports that the policy would compile to the
+  `kitelogik.userpolicy` package.
+
 ## [0.4.0] — 2026-06-04
 
 ### Added

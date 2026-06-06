@@ -305,7 +305,7 @@ def cmd_policy_compile(args: argparse.Namespace) -> int:
 
     if args.check:
         print(f"Valid YAML policy: {input_path}")
-        print(f"Would generate Rego for package defined in {input_path}")
+        print("Would compile to the kitelogik.userpolicy package")
         return 0
 
     if args.output:
