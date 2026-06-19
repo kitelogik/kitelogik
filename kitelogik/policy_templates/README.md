@@ -10,6 +10,7 @@ you copy and `import` into `main.rego`), a template is a complete
 | **Financial refunds** | `financial-refunds.yaml` | Tiers refunds by amount (allow / human-review / deny), blocks sanctioned destinations. |
 | **Healthcare PHI access** | `healthcare-phi-access.yaml` | Clinician-gated record reads, human sign-off on record changes, hard-block on special-category (GDPR Art. 9) queries. |
 | **Code-execution restrictions** | `code-execution-restrictions.yaml` | Blocks shell/eval and raw network egress, confines file writes to a workspace, gates `execute_code` on a scope. |
+| **Customer support** | `customer-support.yaml` | Tiers refunds and credits by amount (allow / human-review / deny), denies account deletion and bulk export, routes external customer messaging through HITL. |
 
 ## Use one
 

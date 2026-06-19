@@ -1,0 +1,116 @@
+# Starter template — Customer support
+#
+# Threat model: a support agent that reads customer records, issues
+# refunds or credits, and sends messages from the support desk. Without
+# governance, the agent could escalate its own permissions, process
+# refunds beyond policy limits, export customer data externally, or send
+# unmoderated messages on behalf of the company.
+#
+# This policy allows ticket and CRM reads for the support role, caps
+# refund/credit amounts (routing the grey zone to a human reviewer),
+# hard-blocks account deletion and bulk data export, and routes external
+# customer messaging through HITL. Anything this policy does not
+# explicitly allow falls through to human review by default (the soft-deny
+# fallback in main.rego), so gaps fail safe.
+#
+# Use it: drop this in as your policies/policy.yaml (kitelogik init
+# scaffolds one), then `kitelogik compile policies/policy.yaml`. Tune the
+# amount thresholds, roles, scopes, and action names to your workflow.
+version: 1
+
+rules:
+  - name: allow_ticket_reads
+    when:
+      action:
+        - get_ticket
+        - search_tickets
+        - get_customer
+        - search_customers
+      role:
+        - support_agent
+        - support_lead
+        - manager
+      scope: read_support_data
+    then: allow
+
+  - name: allow_crm_reads
+    when:
+      action:
+        - get_account
+        - get_contact
+        - list_orders
+        - get_subscription
+      role:
+        - support_agent
+        - support_lead
+        - manager
+      scope: read_customer_data
+    then: allow
+
+  - name: allow_small_refunds
+    when:
+      action: issue_refund
+      role:
+        - support_agent
+        - support_lead
+      scope: process_refunds
+      args:
+        amount:
+          gte: 0
+          lte: 50
+    then: allow
+
+  - name: allow_small_credits
+    when:
+      action: issue_credit
+      role:
+        - support_agent
+        - support_lead
+      scope: process_refunds
+      args:
+        amount:
+          gte: 0
+          lte: 25
+    then: allow
+
+  - name: review_high_refunds
+    when:
+      action: issue_refund
+      args:
+        amount:
+          gt: 50
+    then: hitl
+    reason: "Refunds over $50 require a human reviewer"
+
+  - name: review_high_credits
+    when:
+      action: issue_credit
+      args:
+        amount:
+          gt: 25
+    then: hitl
+    reason: "Credits over $25 require a human reviewer"
+
+  - name: deny_account_deletion
+    when:
+      action: delete_account
+    then: deny
+    reason: "Account deletion is never handled through the support agent"
+
+  - name: deny_bulk_data_export
+    when:
+      action:
+        - export_customers
+        - bulk_export
+        - download_all_tickets
+    then: deny
+    reason: "Bulk data export requires manual security review"
+
+  - name: review_external_messaging
+    when:
+      action:
+        - send_email_to_customer
+        - send_sms_to_customer
+        - send_push_notification
+    then: hitl
+    reason: "Unmoderated outbound messaging to customers requires human approval"
