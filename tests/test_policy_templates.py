@@ -20,12 +20,18 @@ _TEMPLATES = sorted(_TEMPLATES_DIR.glob("*.yaml"))
 _IDS = [p.stem for p in _TEMPLATES]
 
 
-def test_three_templates_ship():
-    assert _IDS == [
-        "code-execution-restrictions",
-        "financial-refunds",
-        "healthcare-phi-access",
-    ]
+# The templates that must always ship. New community templates are welcome:
+# they are picked up automatically by the parametrized schema/compile tests
+# below (via the glob), so adding one does NOT require editing this set.
+_CORE_TEMPLATES = {
+    "code-execution-restrictions",
+    "financial-refunds",
+    "healthcare-phi-access",
+}
+
+
+def test_core_templates_ship():
+    assert _CORE_TEMPLATES.issubset(set(_IDS))
 
 
 @pytest.mark.parametrize("path", _TEMPLATES, ids=_IDS)
