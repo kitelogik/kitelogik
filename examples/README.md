@@ -31,6 +31,7 @@ pip install -e ".[dev]"
 | [`04_langchain_agent.py`](04_langchain_agent.py) | `govern_toolkit` wrapping existing LangChain `BaseTool` objects | `langchain-core` |
 | [`05_hitl_escalation.py`](05_hitl_escalation.py) | Soft-deny → `HITLQueue` enqueue → human approve → audit trail | — |
 | [`06_credential_delegation.py`](06_credential_delegation.py) | `CredentialBroker` subset-only delegation + revocation | — |
+| [`07_plan_gate.py`](07_plan_gate.py) | `Plan-before-execute governance` — whole plan evaluated and blocked if any step would be denied | — |
 
 Run any example directly:
 
