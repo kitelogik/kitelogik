@@ -9,7 +9,9 @@ repos:
         args: ['--maxkb=500']
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.8.0
+    # Keep in lockstep with the ruff==0.16.0 pin in pyproject.toml [dev];
+    # a mismatched formatter version here passes locally but fails CI.
+    rev: v0.16.0
     hooks:
       - id: ruff
         args: [--fix]

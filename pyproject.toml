@@ -58,7 +58,11 @@ dev = [
     "pytest-asyncio>=0.23.0",
     "pytest-mock>=3.14.0",
     "respx>=0.21.0",
-    "ruff>=0.6.0",
+    # Pinned exactly: ruff's formatter output changes between releases, so an
+    # unpinned range lets a routine ruff upgrade break `ruff format --check` on
+    # unchanged code (a scheduled-run failure with no offending commit). Bump
+    # this deliberately via a Dependabot PR that also reformats as needed.
+    "ruff==0.16.0",
     "mypy>=1.10.0",
     "types-PyYAML>=6.0",
     "pre-commit>=3.7.0",
