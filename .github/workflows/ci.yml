@@ -139,17 +139,21 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
-      # Upgrade pip itself so pip-audit doesn't flag the runner's pip for
-      # vulnerabilities that have already been patched upstream (e.g.
-      # CVE-2026-6357, fixed in pip 26.1).
-      - run: python -m pip install --upgrade pip
       - run: pip install -e ".[dev]"
-      - uses: pypa/gh-action-pip-audit@v1.1.0
-        with:
-          # CVE-2026-3219: pip handles concatenated tar/ZIP files ambiguously.
-          # No fix available upstream; revisit when pip ships a patched release.
-          ignore-vulns: |
-            CVE-2026-3219
+      - run: pip install pip-audit
+      # Upgrade the venv's build tooling (pip, setuptools, wheel) to patched
+      # releases immediately before auditing. These live in every venv but are
+      # never shipped as project runtime deps, yet pip-audit scans them — so a
+      # fresh CVE against any of them (e.g. setuptools PYSEC-2026-3447, pip
+      # PYSEC-2026-*) breaks the gate on unchanged code. --upgrade always pulls
+      # the patched version, so the fix is the upgrade, not an ever-growing
+      # ignore list. Done last so the editable install above can't downgrade
+      # them back. (Replaces pypa/gh-action-pip-audit, which audited its own
+      # isolated venv that this upgrade could never reach.)
+      - run: python -m pip install --upgrade pip setuptools wheel
+      # CVE-2026-3219: pip handles concatenated tar/ZIP files ambiguously.
+      # No fix available upstream; revisit when pip ships a patched release.
+      - run: pip-audit --ignore-vuln CVE-2026-3219
 
   secrets:
     name: Secret scan (gitleaks)

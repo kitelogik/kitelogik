@@ -114,8 +114,10 @@ docker run -d --name opa -p 8181:8181 \
 from kitelogik import governed, PolicyGate, OPAClient, SessionContext
 
 gate = PolicyGate(opa_client=OPAClient())  # defaults to http://localhost:8181
-ctx  = SessionContext(session_id="s1", user_role="support",
-                      session_scopes=["read_customer", "approve_refund"])
+ctx = SessionContext(
+    session_id="s1", user_role="support", session_scopes=["read_customer", "approve_refund"]
+)
+
 
 @governed(gate=gate, context=ctx)
 async def approve_refund(customer_id: str, amount: float) -> str:
@@ -130,12 +132,17 @@ async def approve_refund(customer_id: str, amount: float) -> str:
 from kitelogik import governed, PolicyGate, OPAClient, SessionContext
 
 gate = PolicyGate(opa_client=OPAClient())
-ctx  = SessionContext(session_id="s1", user_role="support",
-                      session_scopes=["read_customer", "approve_refund_under_100"])
+ctx = SessionContext(
+    session_id="s1",
+    user_role="support",
+    session_scopes=["read_customer", "approve_refund_under_100"],
+)
+
 
 @governed(gate=gate, context=ctx)
 async def approve_refund(customer_id: str, amount: float) -> str:
     return payment_api.refund(customer_id, amount)
+
 
 # approve_refund("cust_123", 50.0)   → OPA allows, runs normally
 # approve_refund("cust_123", 500.0)  → OPA denies, raises GovernanceError
@@ -149,7 +156,7 @@ from kitelogik.adapters.openai import OpenAIAdapter
 adapter = OpenAIAdapter(gate=gate, context=ctx)
 adapter.register("approve_refund", approve_refund_fn, schema=schema)
 
-tools = adapter.openai_tool_schemas()       # pass to OpenAI API
+tools = adapter.openai_tool_schemas()  # pass to OpenAI API
 results = await adapter.execute_all(calls)  # governed execution
 ```
 
