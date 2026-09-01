@@ -94,6 +94,14 @@ filterwarnings = [
     "error::DeprecationWarning",
     "ignore::DeprecationWarning:httpx",
     "ignore::DeprecationWarning:anthropic",
+    # google-adk (2.7+) deprecates its own `BaseAgentConfig` and emits the
+    # warning at import time — a third-party framework's internal deprecation,
+    # not ours, and not about how we use it. A module-scoped ignore can't
+    # target it: crewai monkeypatches the global `warnings.warn`, so the
+    # warning is attributed to `crewai`, not `google.adk` (and ignoring
+    # `crewai` would silence every post-crewai deprecation, gutting the gate).
+    # Match on the message instead — surgical and stable across attribution.
+    "ignore:BaseAgentConfig is deprecated:DeprecationWarning",
 ]
 markers = [
     "integration: tests that require external services (Docker, OPA) to be running",
