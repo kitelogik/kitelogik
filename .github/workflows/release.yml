@@ -32,7 +32,7 @@ jobs:
           # base64-encoded SHA-256 of every file in dist/ — fed to the
           # SLSA generator's `base64-subjects` input.
           echo "hashes=$(sha256sum * | base64 -w0)" >> "$GITHUB_OUTPUT"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: dist
           path: dist/
@@ -54,7 +54,7 @@ jobs:
           input: pyproject.toml
           output: kitelogik-sbom.cdx.json
           format: json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: sbom
           path: kitelogik-sbom.cdx.json
