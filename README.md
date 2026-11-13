@@ -1,7 +1,6 @@
 # Kite Logik
 
 [![CI](https://github.com/kitelogik/kitelogik/actions/workflows/ci.yml/badge.svg)](https://github.com/kitelogik/kitelogik/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-666%20passing-brightgreen)](https://github.com/kitelogik/kitelogik/actions)
 [![Coverage](https://codecov.io/gh/kitelogik/kitelogik/branch/main/graph/badge.svg)](https://codecov.io/gh/kitelogik/kitelogik)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](https://github.com/kitelogik/kitelogik/blob/main/LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue)](https://www.python.org)
@@ -228,8 +227,8 @@ human, `then: allow` grants. You never write or name a Rego package.
 **Start from a domain template** instead of a blank page —
 [`kitelogik/policy_templates/`](https://github.com/kitelogik/kitelogik/tree/main/kitelogik/policy_templates)
 ships ready-to-edit `policy.yaml` files for financial refunds, healthcare
-PHI access, and code-execution restrictions. Drop one in as your
-`policies/policy.yaml` and compile.
+PHI access, code-execution restrictions, and customer support. Drop one in
+as your `policies/policy.yaml` and compile.
 
 ### Option B: Rego (full control)
 
@@ -304,13 +303,19 @@ child_token = broker.delegate(
 
 | Tier | Examples | Default Outcome |
 |---|---|---|
-| `INFORMATIONAL` | Read-only lookups, memory queries | Auto-allow |
+| `INFORMATIONAL` | Read-only lookups, memory queries | Allow if scoped |
 | `OPERATIONAL` | Write/update operations | Allow if scoped |
-| `TRANSACTIONAL_HIGH` | High-value financial operations | Policy-defined (HITL optional) |
+| `TRANSACTIONAL_LOW` | Low-value financial operations (refunds ≤ $100) | Allow if scoped |
+| `TRANSACTIONAL_HIGH` | High-value financial operations (refunds > $100) | HITL escalation |
 | `DESTRUCTIVE` | Delete, bulk operations | Policy-defined |
 | `SECURITY_CRITICAL` | Shell access, credential ops, path traversal | Hard block |
 
-HITL escalation is triggered **only when OPA policy explicitly sets `requires_hitl := true`** — for high-stakes situations like wire transfers or restricted data access. Most governance decisions resolve instantly with zero human delay.
+The core policy assigns every tier except `DESTRUCTIVE`, which is there for
+your own policies to use. A YAML rule's `risk_tier:` field is accepted but not
+applied yet ([#53](https://github.com/kitelogik/kitelogik/issues/53)), so today
+assigning `DESTRUCTIVE` means adding a `risk_tier` rule to `main.rego`.
+
+HITL escalation is triggered **only when OPA policy explicitly sets `requires_hitl := true`**. Besides your own `then: hitl` rules, the core policy does that in two cases: high-stakes actions such as high-value refunds, and a deliberate soft-deny fallback — an action that no policy allows and none hard-denies goes to human review instead of being silently denied, so policy gaps fail safe. Hard blocks never escalate. Most governance decisions resolve instantly with zero human delay.
 
 ## Project Structure
 
