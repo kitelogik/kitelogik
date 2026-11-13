@@ -55,7 +55,7 @@ Changelog = "https://github.com/kitelogik/kitelogik/blob/main/CHANGELOG.md"
 # Upstream: https://github.com/microsoft/regorus/tree/main/bindings/python
 dev = [
     "pytest>=8.0.0",
-    "pytest-asyncio>=0.23.0",
+    "pytest-asyncio>=0.24.0",  # 0.24 added asyncio_default_fixture_loop_scope
     "pytest-mock>=3.14.0",
     "respx>=0.21.0",
     # Pinned exactly: ruff's formatter output changes between releases, so an
@@ -88,6 +88,10 @@ kitelogik = [
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+# Set explicitly: pytest-asyncio emits a DeprecationWarning when this is
+# unset, and the `error::DeprecationWarning` gate below turns it into a
+# startup crash before any test runs.
+asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
 minversion = "8.0"
 filterwarnings = [
