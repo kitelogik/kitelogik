@@ -19,6 +19,7 @@ from kitelogik.tether.models import (
     SessionContext,
 )
 from kitelogik.tether.opa_client import OPAClient, OPAConnectionError
+from tests.conftest import allowed_hitl_decision_for
 
 # ── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -399,6 +400,15 @@ class TestGovernedToolboxEvaluatePlan:
 
         with pytest.raises(GovernanceError, match="Plan denied"):
             await toolbox.evaluate_plan([{"tool_name": "execute_shell", "args": {}}])
+
+    async def test_toolbox_evaluate_plan_allowed_but_hitl_raises(self, mock_opa, ctx):
+        """An allowed plan that policy routes to HITL is not approved."""
+        mock_opa.evaluate_event.return_value = allowed_hitl_decision_for(RiskTier.OPERATIONAL)
+        gate = PolicyGate(opa_client=mock_opa)
+        toolbox = GovernedToolbox(gate=gate, context=ctx)
+
+        with pytest.raises(GovernanceError, match="Plan requires human approval"):
+            await toolbox.evaluate_plan([{"tool_name": "read_file", "args": {}}])
 
 
 # ── Agent spawn governance tests ─────────────────────────────────────────────

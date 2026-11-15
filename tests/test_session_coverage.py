@@ -18,7 +18,7 @@ from kitelogik.governed import GovernanceError
 from kitelogik.memory.models import TrustTier
 from kitelogik.tether.gate import PolicyGate
 from kitelogik.tether.models import PolicyDecision, RiskTier
-from tests.conftest import make_mock_llm
+from tests.conftest import allowed_hitl_decision_for, make_mock_llm
 
 
 def _allow(reason: str = "Allowed") -> PolicyDecision:
@@ -92,6 +92,21 @@ async def test_agent_spawn_denied_raises_governance_error(agent_ctx):
         await session.run_async("hi", on_event=events.append)
 
     # The on_event emits the spawn-denied frame before the raise
+    assert any(e["type"] == "agent_spawn_denied" for e in events)
+
+
+async def test_agent_spawn_allowed_but_hitl_fails_closed(agent_ctx):
+    """Spawn has no human-approval flow, so an allowed spawn that policy
+    routes to HITL must not proceed — the model is never called."""
+    gate = _make_sanitizing_gate(spawn_decision=allowed_hitl_decision_for(RiskTier.OPERATIONAL))
+    llm = make_mock_llm()
+    session = AgentSession(gate=gate, context=agent_ctx, llm_client=llm)
+
+    events: list[dict] = []
+    with pytest.raises(GovernanceError, match="Agent spawn denied: requires human approval"):
+        await session.run_async("hi", on_event=events.append)
+
+    llm.create_message.assert_not_called()
     assert any(e["type"] == "agent_spawn_denied" for e in events)
 
 

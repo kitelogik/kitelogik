@@ -238,15 +238,16 @@ class AgentSession:
 
         Notes
         -----
-        The approved plan (when ``allow=True`` and ``deny=False``) is
-        cached on ``self._approved_plan`` so subsequent tool-call evaluation
-        can cross-check against it.
+        The approved plan (``allow=True``, ``deny=False`` and
+        ``requires_hitl=False``) is cached on ``self._approved_plan`` so
+        subsequent tool-call evaluation can cross-check against it. A plan
+        that policy allows but routes to HITL is not approved.
 
         Examples
         --------
         >>> plan = [{"tool_name": "read_customer", "args": {"id": "c1"}}]
         >>> decision = await session.submit_plan(plan)
-        >>> if decision.allow:
+        >>> if decision.allow and not decision.requires_hitl:
         ...     await session.run_async("execute the plan")
         """
         event = GovernanceEvent(
@@ -265,7 +266,7 @@ class AgentSession:
                     "decision": decision.model_dump(mode="json"),
                 }
             )
-        if decision.allow and not decision.deny:
+        if decision.allow and not decision.deny and not decision.requires_hitl:
             self._approved_plan = steps
         return decision
 
@@ -354,19 +355,24 @@ class AgentSession:
                 requested_capabilities=list(self.context.session_scopes),
             )
             spawn_decision = await self.gate.evaluate(spawn_event)
-            if not spawn_decision.allow or spawn_decision.deny:
+            # requires_hitl blocks even when policy also allows: spawn has no
+            # human-approval flow, so an escalated spawn fails closed.
+            if spawn_decision.deny or not spawn_decision.allow or spawn_decision.requires_hitl:
+                reason = spawn_decision.reason
+                if spawn_decision.requires_hitl and not spawn_decision.deny:
+                    reason = f"requires human approval (risk tier: {spawn_decision.risk_tier})"
                 if on_event:
                     on_event(
                         {
                             "type": "agent_spawn_denied",
                             "session_id": self.context.session_id,
-                            "reason": spawn_decision.reason,
+                            "reason": reason,
                         }
                     )
                 from kitelogik.governed import GovernanceError
 
                 raise GovernanceError(
-                    f"Agent spawn denied: {spawn_decision.reason}",
+                    f"Agent spawn denied: {reason}",
                     decision=spawn_decision,
                 )
 

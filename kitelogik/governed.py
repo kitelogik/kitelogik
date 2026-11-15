@@ -343,12 +343,17 @@ class GovernedToolbox:
         """
         Evaluate a proposed plan (sequence of actions) before execution.
 
-        Returns a PolicyDecision. Callers should check decision.allow before
-        proceeding with the plan steps.
+        Returns the PolicyDecision only when the plan is approved.
 
-        Raises GovernanceError if the plan is denied.
+        Raises GovernanceError if the plan is denied or requires human
+        approval — an allowed plan that policy routes to HITL is not approved.
         """
         decision = await self._gate.evaluate_plan(steps, self._context)
+        if decision.requires_hitl and not decision.deny:
+            raise GovernanceError(
+                f"Plan requires human approval (risk tier: {decision.risk_tier})",
+                decision=decision,
+            )
         if decision.deny or not decision.allow:
             raise GovernanceError(
                 f"Plan denied by policy: {decision.reason}",
@@ -373,18 +378,23 @@ def _bind_args(fn: Callable, args: tuple, kwargs: dict) -> dict:
 
 
 def _check_decision(action: str, decision: PolicyDecision) -> None:
-    """Raise GovernanceError if the policy decision is not ALLOW."""
+    """Raise GovernanceError unless the decision is a clean ALLOW.
+
+    ``requires_hitl`` is checked before ``allow``: a policy can allow an
+    action and still route it to a human (e.g. a TRANSACTIONAL_HIGH refund),
+    and the escalation must win. Same precedence as ``AgentSession``.
+    """
     if decision.deny:
         raise GovernanceError(
             f"Tool '{action}' hard blocked by security policy: {decision.reason}",
             decision=decision,
         )
+    if decision.requires_hitl:
+        raise GovernanceError(
+            f"Tool '{action}' requires human approval (risk tier: {decision.risk_tier})",
+            decision=decision,
+        )
     if not decision.allow:
-        if decision.requires_hitl:
-            raise GovernanceError(
-                f"Tool '{action}' requires human approval (risk tier: {decision.risk_tier})",
-                decision=decision,
-            )
         raise GovernanceError(
             f"Tool '{action}' denied by policy: {decision.reason}",
             decision=decision,

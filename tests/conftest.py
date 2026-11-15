@@ -163,6 +163,24 @@ def allow_decision_for(reason: str = "Allowed") -> PolicyDecision:
     )
 
 
+def allowed_hitl_decision_for(
+    risk_tier: RiskTier = RiskTier.TRANSACTIONAL_HIGH,
+) -> PolicyDecision:
+    """Standalone helper — an allowed decision that policy still routes to HITL.
+
+    What main.rego returns for e.g. a $500 refund by a manager holding
+    ``approve_refund_under_1000``: ``allow`` and ``requires_hitl`` are both
+    true, and the escalation must win.
+    """
+    return PolicyDecision(
+        allow=True,
+        deny=False,
+        risk_tier=risk_tier,
+        requires_hitl=True,
+        reason=f"Allowed — risk tier: {risk_tier.value}",
+    )
+
+
 def deny_decision_for(
     reason: str = "denied",
     risk_tier: RiskTier = RiskTier.OPERATIONAL,
