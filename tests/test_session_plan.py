@@ -10,8 +10,8 @@ from unittest.mock import AsyncMock
 
 from kitelogik.agents import AgentSession
 from kitelogik.tether.gate import PolicyGate
-from kitelogik.tether.models import GovernanceEvent, SessionContext
-from tests.conftest import deny_decision_for, make_mock_llm
+from kitelogik.tether.models import GovernanceEvent, RiskTier, SessionContext
+from tests.conftest import allowed_hitl_decision_for, deny_decision_for, make_mock_llm
 
 
 def _session(gate: PolicyGate, ctx: SessionContext) -> AgentSession:
@@ -41,6 +41,15 @@ async def test_submit_plan_denied_does_not_store_plan(agent_gate, agent_ctx):
     session = _session(agent_gate, agent_ctx)
     decision = await session.submit_plan([{"tool_name": "x"}])
     assert decision.deny
+    assert session._approved_plan is None
+
+
+async def test_submit_plan_allowed_but_hitl_does_not_store_plan(agent_gate, agent_ctx):
+    """An allowed plan that policy routes to HITL is not an approved plan."""
+    agent_gate.evaluate = AsyncMock(return_value=allowed_hitl_decision_for(RiskTier.OPERATIONAL))
+    session = _session(agent_gate, agent_ctx)
+    decision = await session.submit_plan([{"tool_name": "read_customer"}])
+    assert decision.allow and decision.requires_hitl
     assert session._approved_plan is None
 
 

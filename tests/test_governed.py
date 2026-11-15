@@ -3,14 +3,17 @@
 Tests for kitelogik.governed — @governed decorator and GovernedToolbox.
 """
 
-from unittest.mock import AsyncMock
+import itertools
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from kitelogik.adapters._base import _run_governed_call, governed_handoff
 from kitelogik.governed import GovernanceError, GovernedToolbox, governed
 from kitelogik.tether.gate import PolicyGate
 from kitelogik.tether.models import PolicyDecision, RiskTier, SessionContext
 from kitelogik.tether.opa_client import OPAClient
+from tests.conftest import allowed_hitl_decision_for
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -354,3 +357,97 @@ class TestGovernanceErrorStr:
         err = GovernanceError("Tool 'noop' denied", decision=decision)
 
         assert str(err) == "Tool 'noop' denied"
+
+
+# ── Allowed + requires_hitl: the escalation wins ──────────────────────────────
+#
+# main.rego can return allow=True together with requires_hitl=True — e.g. a
+# TRANSACTIONAL_HIGH refund that the caller's scope otherwise permits. Every
+# enforcement path must treat that as "needs a human", never as allowed.
+
+
+@pytest.mark.parametrize(
+    ("allow", "deny", "requires_hitl"),
+    list(itertools.product([False, True], repeat=3)),
+)
+async def test_governed_runs_body_only_on_clean_allow(
+    gate, ctx, mock_opa, allow, deny, requires_hitl
+):
+    mock_opa.evaluate.return_value = PolicyDecision(
+        allow=allow,
+        deny=deny,
+        risk_tier=RiskTier.OPERATIONAL,
+        requires_hitl=requires_hitl,
+        reason="r",
+    )
+    ran = False
+
+    @governed(gate=gate, context=ctx)
+    async def tool() -> str:
+        nonlocal ran
+        ran = True
+        return "ok"
+
+    clean_allow = allow and not deny and not requires_hitl
+    if clean_allow:
+        assert await tool() == "ok"
+    else:
+        with pytest.raises(GovernanceError):
+            await tool()
+    assert ran is clean_allow
+
+
+async def test_governed_sync_allowed_but_hitl_raises_without_running(gate, ctx, mock_opa):
+    mock_opa.evaluate.return_value = allowed_hitl_decision_for()
+    ran = False
+
+    @governed(gate=gate, context=ctx)
+    def approve_refund(amount: float) -> str:
+        nonlocal ran
+        ran = True
+        return "refunded"
+
+    with pytest.raises(GovernanceError, match="requires human approval") as exc_info:
+        await approve_refund(500.0)
+    assert ran is False
+    assert exc_info.value.decision.allow is True
+    assert exc_info.value.decision.requires_hitl is True
+
+
+async def test_toolbox_call_allowed_but_hitl_raises_without_running(gate, ctx, mock_opa):
+    mock_opa.evaluate.return_value = allowed_hitl_decision_for()
+    calls: list[float] = []
+    toolbox = GovernedToolbox(gate=gate, context=ctx)
+    toolbox.register("approve_refund", lambda amount: calls.append(amount))
+
+    with pytest.raises(GovernanceError, match="requires human approval"):
+        await toolbox.call("approve_refund", {"amount": 500})
+    assert calls == []
+
+
+async def test_adapter_call_allowed_but_hitl_blocks_without_running(ctx):
+    mock_gate = MagicMock(spec=PolicyGate)
+    mock_gate.evaluate_tool_call = AsyncMock(return_value=allowed_hitl_decision_for())
+    calls: list[float] = []
+
+    allowed, result, error = await _run_governed_call(
+        gate=mock_gate,
+        context=ctx,
+        action="approve_refund",
+        tool_name="approve_refund",
+        args={"amount": 500},
+        fn=lambda amount: calls.append(amount),
+    )
+
+    assert allowed is False
+    assert result is None
+    assert error is not None and error.decision.requires_hitl is True
+    assert calls == []
+
+
+async def test_adapter_handoff_allowed_but_hitl_raises(ctx):
+    mock_gate = MagicMock(spec=PolicyGate)
+    mock_gate.evaluate = AsyncMock(return_value=allowed_hitl_decision_for(RiskTier.OPERATIONAL))
+
+    with pytest.raises(GovernanceError, match="requires human approval"):
+        await governed_handoff(gate=mock_gate, context=ctx, target="downstream")
